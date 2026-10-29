@@ -23,7 +23,7 @@ let user=null,ownerId=null,loans=[],customers=[],entryType="loan",selectedLoanId
 const query=new URLSearchParams(location.search);
 const inviteFromUrl=query.get("pair");
 if(inviteFromUrl){sessionStorage.setItem(PAIR_KEY,inviteFromUrl);const cleanUrl=new URL(location.href);cleanUrl.searchParams.delete("pair");history.replaceState({},"",cleanUrl.pathname+cleanUrl.hash);}
-function status(message,ok=false){const el=$("#connection-status");if(el){el.textContent=message;el.style.borderColor=ok?"#b7e7ce":"#f0d9a6";el.style.background=ok?"#f0fff6":"#fff9e9"}const notice=$("#offline-status");if(notice){notice.textContent=message;notice.hidden=!(offlineMode||/pendiente|sin conexión|offline|sincroniz/i.test(message))}}
+function status(message,ok=false){const el=$("#connection-status");if(el){el.textContent=message;el.style.borderColor=ok?"#b7e7ce":"#f0d9a6";el.style.background=ok?"#f0fff6":"#fff9e9"}const notice=$("#offline-status");if(notice){notice.textContent=message;notice.hidden=!(offlineMode||/pendiente|sin conexión|offline/i.test(message));const retry=$("#retry-sync");if(retry)retry.hidden=!(offlineMode&&isUnlocked&&navigator.onLine)}}
 function showApp(show){document.querySelectorAll(".operator-app-only").forEach(n=>n.hidden=!show);$("#pairing-panel").hidden=show;$("#lock-operator").hidden=!show}
 function toast(message){const el=$("#toast");el.textContent=message;el.hidden=false;setTimeout(()=>el.hidden=true,3000)}
 async function sha256Hex(value){const digest=await crypto.subtle.digest("SHA-256",new TextEncoder().encode(value));return Array.from(new Uint8Array(digest),b=>b.toString(16).padStart(2,"0")).join("")}
