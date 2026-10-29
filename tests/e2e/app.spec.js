@@ -48,10 +48,10 @@ test("shows fixed simple interest and total before saving a loan", async ({ page
   await page.getByLabel("Nombre del cliente").fill("Interés prueba");
   await page.getByLabel("Monto en córdobas").fill("5000");
   await page.getByLabel("Plazo (meses)").fill("3");
-  await expect(page.locator("#terms-preview")).toContainText("/C\$\s*2,250\.00/");
-  await expect(page.locator("#terms-preview")).toContainText("/C\$\s*7,250\.00/");
+  await expect(page.locator("#terms-preview")).toContainText(/C\$\s*2,250\.00/);
+  await expect(page.locator("#terms-preview")).toContainText(/C\$\s*7,250\.00/);
   await page.getByRole("button", { name: "Guardar registro" }).click();
-  await expect(page.locator(".record-main", { hasText: "Interés prueba" })).toContainText("/C\$\s*7,250\.00/");
+  await expect(page.locator(".record-main", { hasText: "Interés prueba" })).toContainText(/C\$\s*7,250\.00/);
 });
 
 test("repeat loan keeps customer prefilled and creates a separate loan", async ({ page }) => {
