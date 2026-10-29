@@ -16,3 +16,12 @@ test("authentication fields are properly labeled and sign-up reveals the display
   await page.getByRole("button", { name: "Crear cuenta" }).click();
   await expect(page.getByLabel("Nombre para mostrar")).toBeVisible();
 });
+
+test("login screen can resend a confirmation email and hides the control during sign-up", async ({ page }) => {
+  await page.goto("/");
+  await expect(page.locator("#resend-confirmation")).toBeVisible();
+  await page.getByRole("button", { name: "Crear cuenta" }).click();
+  await expect(page.locator("#resend-confirmation")).toBeHidden();
+  await page.getByRole("button", { name: "Ya tengo cuenta" }).click();
+  await expect(page.locator("#resend-confirmation")).toBeVisible();
+});
