@@ -89,6 +89,7 @@ function openForm(type,loan=null){
  $("#loan-date-field").hidden=isPayment;
  $("#payment-date-field").hidden=!isPayment;
  $("#loan-date").required=!isPayment;$("#payment-date").required=isPayment;
+ $("#loan-date").max=todayLocalDate();$("#payment-date").max=todayLocalDate();
  $("#loan-date").value=todayLocalDate();$("#payment-date").value=todayLocalDate();
  $("#months-field").hidden=isPayment;$("#months").required=!isPayment;$("#months").value="1";
  $("#terms-preview").hidden=isPayment;$("#amount").value="";$("#entry-note").value="";
@@ -104,7 +105,9 @@ async function saveEntry(event){
   if(entryType!=="payment"&&(!Number.isInteger(months)||months<1||months>120))throw new Error("El plazo debe ser de 1 a 120 meses.");
   const loanDate=$("#loan-date").value,paidAt=$("#payment-date").value?dateInputTimestamp($("#payment-date").value):now;
   if(entryType==="payment"&&!$("#payment-date").value)throw new Error("Selecciona la fecha del abono.");
+  if(entryType==="payment"&&$("#payment-date").value>todayLocalDate())throw new Error("La fecha del abono no puede estar en el futuro.");
   if(entryType!=="payment"&&!loanDate)throw new Error("Selecciona la fecha del préstamo.");
+  if(entryType!=="payment"&&loanDate>todayLocalDate())throw new Error("La fecha del préstamo no puede estar en el futuro.");
   const vault=getVault();const nextCustomers=[...(vault.customers||[])];const nextLoans=[...(vault.loans||[])];const queue=[...(vault.queue||[])];
   if(entryType==="payment"){
    const loan=nextLoans.find(l=>l.id===selectedLoanId);if(!loan)throw new Error("No se identificó el préstamo exacto.");
