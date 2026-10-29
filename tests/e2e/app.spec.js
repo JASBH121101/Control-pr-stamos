@@ -104,6 +104,10 @@ test("owner dashboard stays clean until an action is chosen and can rename a tru
 
   await expect(page.locator("#connection-status")).toContainText("Conectado y sincronizado");
   await expect(page.locator("#entry-panel")).toBeHidden();
+  for (const id of ["#client-name", "#client-phone", "#amount", "#entry-note"]) {
+    await expect(page.locator(id)).toHaveJSProperty("placeholder", "");
+  }
+  await expect(page.locator("#terms-preview")).toBeHidden();
   await expect(page.locator("#show-loan-form")).toBeVisible();
   await expect(page.locator("#loan-records-panel")).toBeVisible();
   await expect(page.locator("#device-admin-panel")).toBeVisible();
