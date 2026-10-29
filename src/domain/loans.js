@@ -19,6 +19,12 @@ export function calculateLoanTerms(principalCents, months, monthlyRate = MONTHLY
   return { interestCents, totalDueCents: principalCents + interestCents, months, monthlyRate };
 }
 
+export function calculateMonthlyReferenceCents(totalDueCents, months) {
+  if (!Number.isSafeInteger(totalDueCents) || totalDueCents <= 0) throw new RangeError("El total a devolver debe ser mayor que cero.");
+  if (!Number.isInteger(months) || months < 1 || months > 120) throw new RangeError("El plazo debe estar entre 1 y 120 meses.");
+  return Math.round(totalDueCents / months);
+}
+
 export function createLoan({ id, client, principalCents, months = 1, note = "", createdAt = new Date().toISOString() }) {
   const normalizedClient = String(client ?? "").trim();
   if (!normalizedClient) throw new Error("El nombre del cliente es obligatorio.");
