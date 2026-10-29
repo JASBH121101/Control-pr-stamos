@@ -106,6 +106,12 @@ async function refreshBiometricControls() {
   }
   if (enableButton) enableButton.hidden = !isUnlocked || !navigator.onLine || Boolean(info) || !supported;
   if (disableButton) disableButton.hidden = !isUnlocked || !navigator.onLine || !info;
+  const description = $("#pairing-description");
+  if (description && !isUnlocked && !$("#pin-unlock-form").hidden) {
+    description.textContent = info && supported
+      ? "Usa la huella dactilar o el PIN de respaldo de este celular."
+      : "Introduce el PIN para entrar. Después podrás activar la huella si tu celular la admite.";
+  }
   const statusEl = $("#biometric-status");
   if (statusEl) {
     statusEl.hidden = !(isUnlocked && info && !navigator.onLine);
