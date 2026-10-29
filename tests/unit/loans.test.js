@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { calculateLoanTerms, createLoan, formatCordobas, getBalance, recordPayment, summarizeLoans, toCents } from "../../src/domain/loans.js";
+import { calculateLoanTerms, calculateMonthlyReferenceCents, createLoan, formatCordobas, getBalance, recordPayment, summarizeLoans, toCents } from "../../src/domain/loans.js";
 
 const sample = () => createLoan({ id: "loan-1", client: " Ana Pérez ", principalCents: 500000, months: 3, createdAt: "2026-01-01T00:00:00.000Z" });
 
@@ -16,6 +16,13 @@ test("simple interest is fixed at 15 percent monthly without compounding", () =>
   assert.deepEqual(calculateLoanTerms(500000, 3), { interestCents: 225000, totalDueCents: 725000, months: 3, monthlyRate: 0.15 });
   assert.throws(() => calculateLoanTerms(500000, 3, 0.1), /fijada en 15%/);
 });
+test("calculates a rounded monthly installment reference from total due", () => {
+  assert.equal(calculateMonthlyReferenceCents(725000, 3), 241667);
+  assert.equal(calculateMonthlyReferenceCents(115000, 1), 115000);
+  assert.throws(() => calculateMonthlyReferenceCents(0, 1), /mayor que cero/);
+  assert.throws(() => calculateMonthlyReferenceCents(100, 0), /plazo/);
+});
+
 test("creates a normalized loan with interest, total and timestamp", () => {
   const loan = sample();
   assert.equal(loan.client, "Ana Pérez");
