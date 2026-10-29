@@ -23,7 +23,7 @@ test("operator PIN forms enforce a 4-to-6 digit pattern", async ({ page }) => {
 test("owner interface exposes device pairing and revocation controls", async ({ page }) => {
   await page.goto("/");
   await expect(page.locator("#device-admin-panel")).toBeAttached();
-  await expect(page.getByRole("button", { name: /Generar enlace seguro/ })).toBeAttached();
+  await expect(page.locator("#create-operator-invite")).toBeAttached();
   await expect(page.locator("#operator-device-list")).toBeAttached();
 });
 
