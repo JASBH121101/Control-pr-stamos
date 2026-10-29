@@ -35,7 +35,14 @@ function displayDay(value){
 }
 function toast(message){const t=$("#toast");t.textContent=message;t.hidden=false;setTimeout(()=>t.hidden=true,3000)}
 function setConnection(text,ok=false){$("#connection-status").innerHTML="<strong>Conexión:</strong> "+esc(text);$("#connection-status").style.borderColor=ok?"#b7e7ce":"#f0d9a6";$("#connection-status").style.background=ok?"#f0fff6":"#fff9e9"}
-function showAuth(show){$("#auth-panel").hidden=!show;document.querySelectorAll(".app-only").forEach(n=>n.hidden=show);$("#signout-button").hidden=show}
+function showAuth(show){
+ $("#auth-panel").hidden=!show;
+ document.querySelectorAll(".app-only").forEach(n=>{
+  if(show)n.hidden=true;
+  else if(!n.classList.contains("keep-hidden-until-action"))n.hidden=false;
+ });
+ $("#signout-button").hidden=show;
+}
 function setAuthMode(next){authMode=next;$("#auth-title").textContent=next==="login"?"Inicia sesión":"Crear cuenta";$("#auth-description").textContent=next==="login"?"Entra para consultar tus registros sincronizados.":"Crea tu acceso privado. Usa un correo al que puedas acceder.";$("#auth-submit").textContent=next==="login"?"Iniciar sesión":"Crear cuenta";$("#toggle-auth-mode").textContent=next==="login"?"Crear cuenta":"Ya tengo cuenta";$("#auth-name").hidden=next==="login";$("#auth-name-label").hidden=next==="login";$("#auth-password").autocomplete=next==="login"?"current-password":"new-password";$("#auth-error").hidden=true}
 async function sha256Hex(value) {
  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value));
@@ -237,12 +244,38 @@ async function loadOperatorDevices(){
  const {data,error}=await supabase.from("operator_devices").select("id,device_name,is_active,paired_at,last_seen_at").eq("owner_id",user.id).order("paired_at",{ascending:false});
  if(error){list.innerHTML='<p class="empty-state">No se pudieron cargar los dispositivos.</p>';return;}
  if(!data?.length){list.innerHTML='<p class="empty-state">Todavía no hay dispositivos vinculados.</p>';return;}
- list.innerHTML=data.map(d=>`<div class="device-row"><div><strong>${esc(d.device_name)}</strong><small>Vinculado: ${date(d.paired_at)}</small><small>${d.last_seen_at?"Última actividad: "+date(d.last_seen_at):"Sin actividad reciente"}</small></div><span class="device-status ${d.is_active?"":"revoked"}">${d.is_active?"ACTIVO":"REVOCADO"}</span>${d.is_active?`<button class="device-revoke" data-revoke-device="${d.id}" type="button">Revocar</button>`:""}</div>`).join("");
+ list.innerHTML=data.map(d=>`<div class="device-row" data-device-row="${d.id}"><div class="device-meta"><strong data-device-name>${esc(d.device_name)}</strong><small>Vinculado: ${date(d.paired_at)}</small><small>${d.last_seen_at?"Última actividad: "+date(d.last_seen_at):"Sin actividad reciente"}</small></div><span class="device-status ${d.is_active?"":"revoked"}">${d.is_active?"ACTIVO":"REVOCADO"}</span><div class="device-actions">${d.is_active?`<button class="device-rename" data-rename-device="${d.id}" type="button">✎ Cambiar nombre</button><button class="device-revoke" data-revoke-device="${d.id}" type="button">Revocar</button>`:""}</div><form class="device-rename-form" data-rename-form="${d.id}" hidden><label for="device-name-${d.id}">Nombre del dispositivo</label><input id="device-name-${d.id}" name="device_name" maxlength="60" required value="${esc(d.device_name)}" autocomplete="off"><div class="device-rename-actions"><button class="primary-button" data-save-device-name="${d.id}" type="submit">Guardar nombre</button><button class="secondary-button" data-cancel-rename="${d.id}" type="button">Cancelar</button></div></form></div>`).join("");
 }
 $("#create-operator-invite").addEventListener("click",createOperatorInvite);
 $("#copy-operator-invite").addEventListener("click",async()=>{try{await navigator.clipboard.writeText($("#operator-invite-url").value);toast("Enlace copiado.")}catch{ $("#operator-invite-url").focus();$("#operator-invite-url").select();toast("Copia el enlace seleccionado.")}});
 $("#refresh-operator-devices").addEventListener("click",loadOperatorDevices);
-$("#operator-device-list").addEventListener("click",async e=>{const b=e.target.closest("[data-revoke-device]");if(!b)return;if(!confirm("¿Revocar el acceso de este dispositivo? Dejará de poder ver y modificar préstamos."))return;const {error}=await supabase.from("operator_devices").update({is_active:false}).eq("id",b.dataset.revokeDevice).eq("owner_id",user.id);if(error){toast("No se pudo revocar: "+error.message);return}toast("Acceso revocado.");await loadOperatorDevices()});
+$("#operator-device-list").addEventListener("click",async e=>{
+ const rename=e.target.closest("[data-rename-device]");
+ if(rename){const row=rename.closest("[data-device-row]");const form=row?.querySelector("[data-rename-form]");if(form){form.hidden=false;form.querySelector("input")?.focus();}return;}
+ const cancel=e.target.closest("[data-cancel-rename]");
+ if(cancel){const row=cancel.closest("[data-device-row]");const form=row?.querySelector("[data-rename-form]");if(form){const input=form.querySelector("input");if(input)input.value=row.querySelector("[data-device-name]")?.textContent||"";form.hidden=true;}return;}
+ const revoke=e.target.closest("[data-revoke-device]");
+ if(!revoke)return;
+ if(!confirm("¿Revocar el acceso de este dispositivo? Dejará de poder ver y modificar préstamos."))return;
+ revoke.disabled=true;
+ const {error}=await supabase.from("operator_devices").update({is_active:false}).eq("id",revoke.dataset.revokeDevice).eq("owner_id",user.id);
+ if(error){toast("No se pudo revocar: "+error.message);revoke.disabled=false;return}
+ toast("Acceso revocado.");await loadOperatorDevices();
+});
+$("#operator-device-list").addEventListener("submit",async e=>{
+ const form=e.target.closest("[data-rename-form]");if(!form)return;
+ e.preventDefault();
+ const row=form.closest("[data-device-row]"),id=form.dataset.renameForm,input=form.querySelector('input[name="device_name"]'),button=e.submitter;
+ const name=String(input?.value||"").trim();
+ if(!name){toast("Escribe un nombre para el dispositivo.");input?.focus();return;}
+ if(name.length>60){toast("El nombre debe tener 60 caracteres o menos.");input?.focus();return;}
+ button.disabled=true;
+ const {data,error}=await supabase.from("operator_devices").update({device_name:name}).eq("id",id).eq("owner_id",user.id).select("id,device_name").maybeSingle();
+ if(error){toast("No se pudo cambiar el nombre: "+error.message);button.disabled=false;return;}
+ if(!data){toast("No se encontró el dispositivo o no tienes permiso para cambiarlo.");button.disabled=false;return;}
+ const label=row.querySelector("[data-device-name]");if(label)label.textContent=data.device_name;
+ form.hidden=true;button.disabled=false;toast("Nombre del dispositivo actualizado.");
+});
 
 function setMode(next="owner"){
  mode="owner";
