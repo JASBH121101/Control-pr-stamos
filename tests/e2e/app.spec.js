@@ -25,6 +25,17 @@ test("owner interface exposes device pairing and revocation controls", async ({ 
   await expect(page.locator("#device-admin-panel")).toBeAttached();
   await expect(page.locator("#create-operator-invite")).toBeAttached();
   await expect(page.locator("#operator-device-list")).toBeAttached();
+  await expect(page.locator("#client-phone")).toHaveCount(1);
+  await expect(page.locator("#loan-date")).toHaveAttribute("type", "date");
+  await expect(page.locator("#payment-date")).toHaveAttribute("type", "date");
+});
+
+test("operator forms include the loan date, payment date and optional phone", async ({ page }) => {
+  await page.goto("/operador.html");
+  await expect(page.locator("#client-phone")).toHaveCount(1);
+  await expect(page.locator("#loan-date")).toHaveAttribute("type", "date");
+  await expect(page.locator("#payment-date")).toHaveAttribute("type", "date");
+  await expect(page.locator("#terms-preview")).toBeAttached();
 });
 
 test("operator money is a currency-formatted text field", async ({ page }) => {
