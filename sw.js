@@ -63,13 +63,7 @@ self.addEventListener("fetch", event => {
     }
 
     const cached = await cache.match(request, { ignoreSearch: true });
-    if (cached) {
-      event.waitUntil(fetch(request).then(response => {
-        if (response.ok) return cache.put(request, response);
-        return undefined;
-      }).catch(() => undefined));
-      return cached;
-    }
+    if (cached) return cached;
 
     try {
       const response = await fetch(request);
