@@ -1,5 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.0";
-import { calculateLoanTerms, formatCordobas, toCents } from "./domain/loans.js";
+import { calculateLoanTerms, calculateMonthlyReferenceCents, formatCordobas, toCents } from "./domain/loans.js";
 
 const SUPABASE_URL = "https://ctdcqwffzhpzgevqahob.supabase.co";
 const SUPABASE_KEY = "sb_publishable_OV4MxEx5M-nRNQWnaOVXcA_B7YW8z73";
@@ -16,6 +16,23 @@ if (ownerCodeFromUrl) {
 const money = (cents) => formatCordobas(Number(cents || 0));
 const esc = (v) => String(v ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 const date = (v) => new Intl.DateTimeFormat("es-NI",{dateStyle:"medium",timeStyle:"short",timeZone:"America/Managua"}).format(new Date(v));
+function todayLocalDate(){
+ const parts=new Intl.DateTimeFormat("en-CA",{timeZone:"America/Managua",year:"numeric",month:"2-digit",day:"2-digit"}).formatToParts(new Date());
+ const part=Object.fromEntries(parts.map(p=>[p.type,p.value]));
+ return part.year+"-"+part.month+"-"+part.day;
+}
+function dateInputTimestamp(value){
+ if(!/^\d{4}-\d{2}-\d{2}$/.test(String(value||"")))throw new Error("Selecciona una fecha válida.");
+ const parsed=new Date(value+"T12:00:00-06:00");
+ if(Number.isNaN(parsed.getTime()))throw new Error("La fecha indicada no es válida.");
+ return parsed.toISOString();
+}
+function displayDay(value){
+ if(!value)return "—";
+ const raw=String(value);
+ const normalized=/^\d{4}-\d{2}-\d{2}$/.test(raw)?raw+"T12:00:00-06:00":raw;
+ return new Intl.DateTimeFormat("es-NI",{dateStyle:"medium",timeZone:"America/Managua"}).format(new Date(normalized));
+}
 function toast(message){const t=$("#toast");t.textContent=message;t.hidden=false;setTimeout(()=>t.hidden=true,3000)}
 function setConnection(text,ok=false){$("#connection-status").innerHTML="<strong>Conexión:</strong> "+esc(text);$("#connection-status").style.borderColor=ok?"#b7e7ce":"#f0d9a6";$("#connection-status").style.background=ok?"#f0fff6":"#fff9e9"}
 function showAuth(show){$("#auth-panel").hidden=!show;document.querySelectorAll(".app-only").forEach(n=>n.hidden=show);$("#signout-button").hidden=show}
@@ -90,24 +107,96 @@ async function authSubmit(e) {
 }
 function balance(loan){return Math.max(0,Number(loan.total_due_cents)-Number(loan.paid_cents||0))}
 function render(){
- const outstanding=loans.reduce((s,l)=>s+balance(l),0), principal=loans.reduce((s,l)=>s+Number(l.principal_cents),0), paid=loans.reduce((s,l)=>s+Number(l.paid_cents||0),0), active=loans.filter(l=>balance(l)>0).length;
- $("#outstanding-total").textContent=money(outstanding);$("#active-count").textContent=String(active);$("#lent-total").textContent=money(principal);$("#paid-total").textContent=money(paid);
- const collectedInterest=loans.reduce((sum,l)=>sum+Math.max(0,Math.min(Number(l.interest_cents),Number(l.paid_cents||0)-Number(l.principal_cents))),0);
- $("#interest-collected").textContent=money(collectedInterest);$("#interest-expected").textContent=money(loans.reduce((s,l)=>s+(balance(l)>0?Math.max(0,Number(l.interest_cents)-Math.max(0,Number(l.paid_cents||0)-Number(l.principal_cents))):0),0));
- const q=$("#search").value.trim().toLocaleLowerCase("es");const filtered=loans.filter(l=>(l.customers?.full_name||"").toLocaleLowerCase("es").includes(q));
- $("#empty-state").hidden=filtered.length>0;$("#empty-state").textContent=q?"No hay resultados para esa búsqueda.":"No hay préstamos registrados. Usa «Registrar préstamo» para comenzar.";
- $("#record-list").innerHTML=filtered.map(l=>{const name=l.customers?.full_name||"Cliente";return `<article class="record-card"><div class="record-avatar" aria-hidden="true">${esc(name.slice(0,1).toUpperCase())}</div><div class="record-main"><h3>${esc(name)}</h3><small>${Number(l.term_months)} mes(es) · ${date(l.created_at)}</small><div class="detail-extra" id="detail-${l.id}" hidden><p>Capital: ${money(l.principal_cents)}</p><p>Interés acordado: ${money(l.interest_cents)}</p><p>Total: ${money(l.total_due_cents)}</p><p>Abonado: ${money(l.paid_cents)}</p>${l.note?`<p>Nota: ${esc(l.note)}</p>`:""}</div></div><div class="record-balance"><span>Saldo pendiente</span><strong>${money(balance(l))}</strong><div class="record-actions"><button class="small-pay-button" data-pay="${l.id}" type="button" ${balance(l)<=0?"disabled":""} aria-label="Registrar abono">＋ Abono</button><button class="small-icon-button" data-view="${l.id}" type="button" aria-label="Ver detalle" title="Ver detalle">◉</button><select class="record-menu" data-menu="${l.id}" aria-label="Más opciones"><option value="">Opciones</option><option value="repeat">Prestar de nuevo</option><option value="payments">Ver abonos</option></select></div></div></article>`}).join("");
- $("#history-list").innerHTML=loans.length?loans.map(l=>`<div class="history-row"><strong>${esc(l.customers?.full_name||"Cliente")}</strong><span>Capital ${money(l.principal_cents)}</span><span>Abonos ${money(l.paid_cents)}</span><span>Pendiente ${money(balance(l))}</span><span>${date(l.created_at)}</span></div>`).join(""):"<p>Sin movimientos registrados.</p>";
+ const outstanding=loans.reduce((s,l)=>s+balance(l),0);
+ const principal=loans.reduce((s,l)=>s+Number(l.principal_cents||0),0);
+ const paid=loans.reduce((s,l)=>s+Number(l.paid_cents||0),0);
+ const active=loans.filter(l=>balance(l)>0).length;
+ $("#outstanding-total").textContent=money(outstanding);
+ $("#active-count").textContent=String(active);
+ $("#lent-total").textContent=money(principal);
+ $("#paid-total").textContent=money(paid);
+ const collectedInterest=loans.reduce((sum,l)=>sum+Math.max(0,Math.min(Number(l.interest_cents||0),Number(l.paid_cents||0)-Number(l.principal_cents||0))),0);
+ $("#interest-collected").textContent=money(collectedInterest);
+ $("#interest-expected").textContent=money(loans.reduce((s,l)=>s+(balance(l)>0?Math.max(0,Number(l.interest_cents||0)-Math.max(0,Number(l.paid_cents||0)-Number(l.principal_cents||0))):0),0));
+ const q=$("#search").value.trim().toLocaleLowerCase("es");
+ const filtered=loans.filter(l=>(l.customers?.full_name||"").toLocaleLowerCase("es").includes(q));
+ $("#empty-state").hidden=filtered.length>0;
+ $("#empty-state").textContent=q?"No hay resultados para esa búsqueda.":"No hay préstamos registrados. Usa «Registrar préstamo» para comenzar.";
+ $("#record-list").innerHTML=filtered.map(l=>{
+  const name=l.customers?.full_name||"Cliente";
+  const loanDate=displayDay(l.loan_date||l.created_at);
+  const phone=String(l.customers?.phone||"").trim();
+  const installment=calculateMonthlyReferenceCents(Number(l.total_due_cents||l.principal_cents),Number(l.term_months||1));
+  const payments=[...(l.payments||[])].sort((a,b)=>new Date(b.paid_at)-new Date(a.paid_at));
+  const paymentHistory=payments.length
+   ?'<ul class="payment-history-list">'+payments.map(p=>'<li><span>'+esc(displayDay(p.paid_at))+'</span><strong>'+money(Number(p.amount_cents||0))+'</strong>'+(p.note?'<small>'+esc(p.note)+'</small>':'')+'</li>').join("")+'</ul>'
+   :'<p class="muted-copy">Todavía no hay abonos registrados.</p>';
+  return '<article class="record-card"><div class="record-avatar" aria-hidden="true">'+esc(name.slice(0,1).toUpperCase())+'</div><div class="record-main"><h3>'+esc(name)+'</h3><small>Préstamo: '+esc(loanDate)+' · '+Number(l.term_months)+' mes(es)</small><div class="detail-extra" id="detail-'+esc(l.id)+'" hidden><p>Fecha del préstamo: <strong>'+esc(loanDate)+'</strong></p>'+(phone?'<p>Teléfono: <strong>'+esc(phone)+'</strong></p>':'')+'<p>Capital: <strong>'+money(Number(l.principal_cents||0))+'</strong></p><p>Interés total (15% simple mensual): <strong>'+money(Number(l.interest_cents||0))+'</strong></p><p>Total acordado: <strong>'+money(Number(l.total_due_cents||0))+'</strong></p><p>Cuota mensual de referencia: <strong>'+money(installment)+'</strong></p><p>Total abonado: <strong>'+money(Number(l.paid_cents||0))+'</strong></p><p>Saldo pendiente: <strong>'+money(balance(l))+'</strong></p>'+(l.note?'<p>Nota: '+esc(l.note)+'</p>':'')+'<div class="payment-history"><h4>Abonos registrados ('+payments.length+')</h4>'+paymentHistory+'</div></div></div><div class="record-balance"><span>Saldo pendiente</span><strong>'+money(balance(l))+'</strong><div class="record-actions"><button class="small-pay-button" data-pay="'+esc(l.id)+'" type="button" '+(balance(l)<=0?'disabled':'')+' aria-label="Registrar abono">＋ Abono</button><button class="small-icon-button" data-view="'+esc(l.id)+'" type="button" aria-label="Ver detalle" title="Ver detalle">◉</button><select class="record-menu" data-menu="'+esc(l.id)+'" aria-label="Más opciones"><option value="">Opciones</option><option value="repeat">Prestar de nuevo</option><option value="payments">Ver abonos</option></select></div></div></article>';
+ }).join("");
+ $("#history-list").innerHTML=loans.length?loans.map(l=>'<div class="history-row"><strong>'+esc(l.customers?.full_name||"Cliente")+'</strong><span>Préstamo: '+esc(displayDay(l.loan_date||l.created_at))+'</span><span>Capital: '+money(Number(l.principal_cents||0))+'</span><span>Abonos: '+money(Number(l.paid_cents||0))+'</span><span>Pendiente: '+money(balance(l))+'</span></div>').join(""):"<p>Sin movimientos registrados.</p>";
 }
-async function loadData(){const {data,error}=await supabase.from("loans").select("*, customers(full_name), payments(id,amount_cents,paid_at,note)").order("created_at",{ascending:false});if(error)throw error;loans=(data||[]).map(l=>({...l,paid_cents:(l.payments||[]).reduce((s,p)=>s+Number(p.amount_cents),0)}));render()}
-function openForm(type,loan=null){entryType=type;selectedLoanId=loan?.id||null;$("#entry-title").textContent=type==="loan"?"Registrar préstamo":type==="repeat"?"Prestar de nuevo":"Registrar abono";$("#client-name").value=loan?.customers?.full_name||"";$("#client-name").readOnly=Boolean(loan);$("#months-field").hidden=type==="payment";$("#months").required=type!=="payment";$("#months").value="1";$("#terms-preview").hidden=type==="payment";$("#amount").value="";$("#entry-note").value="";$("#form-error").hidden=true;updatePreview();$("#entry-panel").hidden=false;$("#client-name").focus();$("#entry-panel").scrollIntoView({behavior:"smooth",block:"start"})}
+async function loadData(){const {data,error}=await supabase.from("loans").select("*, customers(full_name,phone), payments(id,amount_cents,paid_at,note)").order("created_at",{ascending:false});if(error)throw error;loans=(data||[]).map(l=>({...l,paid_cents:(l.payments||[]).reduce((s,p)=>s+Number(p.amount_cents),0)}));render()}
+function openForm(type,loan=null){
+ entryType=type;selectedLoanId=loan?.id||null;
+ const isPayment=type==="payment";
+ $("#entry-title").textContent=type==="loan"?"Registrar préstamo":type==="repeat"?"Prestar de nuevo":"Registrar abono";
+ $("#client-name").value=loan?.customers?.full_name||"";
+ $("#client-name").readOnly=Boolean(loan);
+ $("#client-phone").value=loan?.customers?.phone||"";
+ $("#client-phone").readOnly=Boolean(loan);
+ $("#client-phone-field").hidden=isPayment;
+ $("#loan-date-field").hidden=isPayment;
+ $("#payment-date-field").hidden=!isPayment;
+ $("#loan-date").required=!isPayment;
+ $("#payment-date").required=isPayment;
+ $("#loan-date").value=loan?.loan_date||todayLocalDate();
+ $("#payment-date").value=todayLocalDate();
+ $("#months-field").hidden=isPayment;$("#months").required=!isPayment;$("#months").value="1";
+ $("#terms-preview").hidden=isPayment;$("#amount").value="";$("#entry-note").value="";
+ $("#form-error").hidden=true;updatePreview();$("#entry-panel").hidden=false;
+ $("#client-name").focus();$("#entry-panel").scrollIntoView({behavior:"smooth",block:"start"});
+}
 function closeForm(){$("#entry-panel").hidden=true;$("#client-name").readOnly=false;selectedLoanId=null}
 function parseMoney(raw){const cleaned=String(raw).replace(/C\$/gi,"").replace(/\s/g,"").replace(/,/g,"");if(!/^\d+(\.\d{0,2})?$/.test(cleaned))throw new Error("Escribe un monto válido, por ejemplo C$ 1,250.00.");return toCents(cleaned)}
 function updatePreview(){if($("#terms-preview").hidden)return;try{const cents=parseMoney($("#amount").value),months=Number($("#months").value);if(!cents||!Number.isInteger(months)||months<1||months>120){$("#terms-preview").textContent="Interés simple fijo: 15% mensual.";return}const interest=Math.round(cents*.15*months);$("#terms-preview").textContent=`Interés: ${money(interest)} · Total a devolver: ${money(cents+interest)}`}catch{$("#terms-preview").textContent="Interés simple fijo: 15% mensual."}}
 $("#amount").addEventListener("focus",()=>{if(!$("#amount").value)$("#amount").placeholder="C$ 0.00"});
 $("#amount").addEventListener("blur",()=>{try{if($("#amount").value)$("#amount").value=money(parseMoney($("#amount").value))}catch{}});
 $("#amount").addEventListener("input",updatePreview);$("#months").addEventListener("input",updatePreview);
-$("#entry-form").addEventListener("submit",async e=>{e.preventDefault();const error=$("#form-error");error.hidden=true;const submit=e.submitter;submit.disabled=true;try{const amountCents=parseMoney($("#amount").value),note=$("#entry-note").value.trim(),months=Number($("#months").value);if(amountCents<=0)throw new Error("El monto debe ser mayor que cero.");if(entryType==="payment"){const loan=loans.find(l=>l.id===selectedLoanId);if(!loan)throw new Error("No se identificó el préstamo exacto.");if(amountCents>balance(loan))throw new Error("El abono no puede superar el saldo pendiente.");const {error:e}=await supabase.from("payments").insert({owner_id:user.id,loan_id:loan.id,amount_cents:amountCents,note});if(e)throw e}else{let customerId;if(entryType==="repeat"){const source=loans.find(l=>l.id===selectedLoanId);customerId=source?.customer_id;if(!customerId)throw new Error("No se encontró el cliente.")}else{const {data:customer,error:ce}=await supabase.from("customers").insert({owner_id:user.id,full_name:$("#client-name").value.trim(),notes:null}).select("id").single();if(ce)throw ce;customerId=customer.id}const terms=calculateLoanTerms(amountCents,months);const {error:e}=await supabase.from("loans").insert({owner_id:user.id,customer_id:customerId,principal_cents:amountCents,term_months:months,monthly_rate:terms.monthlyRate,interest_cents:terms.interestCents,total_due_cents:terms.totalDueCents,status:"active",note});if(e)throw e}await loadData();closeForm();toast(entryType==="payment"?"Abono guardado.":"Préstamo guardado y sincronizado.")}catch(ex){error.textContent=ex.message||"No se pudo guardar.";error.hidden=false}finally{submit.disabled=false}});
+$("#entry-form").addEventListener("submit",async e=>{
+ e.preventDefault();
+ const error=$("#form-error");error.hidden=true;
+ const submit=e.submitter;submit.disabled=true;
+ try{
+  const amountCents=parseMoney($("#amount").value),note=$("#entry-note").value.trim();
+  if(amountCents<=0)throw new Error("El monto debe ser mayor que cero.");
+  if(entryType==="payment"){
+   const loan=loans.find(l=>l.id===selectedLoanId);
+   if(!loan)throw new Error("No se identificó el préstamo exacto.");
+   if(amountCents>balance(loan))throw new Error("El abono no puede superar el saldo pendiente.");
+   const paidAt=dateInputTimestamp($("#payment-date").value);
+   const {error:paymentError}=await supabase.from("payments").insert({owner_id:user.id,loan_id:loan.id,amount_cents:amountCents,paid_at:paidAt,note});
+   if(paymentError)throw paymentError;
+  }else{
+   const months=Number($("#months").value),loanDate=$("#loan-date").value;
+   if(!loanDate)throw new Error("Selecciona la fecha del préstamo.");
+   const customerName=$("#client-name").value.trim(),phone=$("#client-phone").value.trim();
+   if(!customerName)throw new Error("Escribe el nombre del cliente.");
+   let customerId;
+   if(entryType==="repeat"){
+    const source=loans.find(l=>l.id===selectedLoanId);customerId=source?.customer_id;
+    if(!customerId)throw new Error("No se encontró el cliente.");
+   }else{
+    const {data:customer,error:customerError}=await supabase.from("customers").insert({owner_id:user.id,full_name:customerName,phone:phone||null,notes:null}).select("id").single();
+    if(customerError)throw customerError;customerId=customer.id;
+   }
+   const terms=calculateLoanTerms(amountCents,months);
+   const {error:loanError}=await supabase.from("loans").insert({owner_id:user.id,customer_id:customerId,loan_date:loanDate,principal_cents:amountCents,term_months:months,monthly_rate:terms.monthlyRate,interest_cents:terms.interestCents,total_due_cents:terms.totalDueCents,status:"active",note});
+   if(loanError)throw loanError;
+  }
+  await loadData();closeForm();toast(entryType==="payment"?"Abono guardado con su fecha.":"Préstamo guardado y sincronizado.");
+ }catch(ex){error.textContent=ex.message||"No se pudo guardar.";error.hidden=false}
+ finally{submit.disabled=false}
+});
 $("#auth-form").addEventListener("submit",authSubmit);$("#toggle-auth-mode").addEventListener("click",()=>setAuthMode(authMode==="login"?"signup":"login"));
 $("#toggle-password").addEventListener("click",()=>{const input=$("#auth-password"),button=$("#toggle-password"),show=input.type==="password";input.type=show?"text":"password";button.textContent=show?"Ocultar contraseña":"Mostrar contraseña";button.setAttribute("aria-pressed",String(show));});
 
@@ -151,7 +240,7 @@ function setMode(next="owner"){
 $("#show-loan-form").addEventListener("click",()=>openForm("loan"));$("#show-payment-form").addEventListener("click",()=>{const active=loans.filter(l=>balance(l)>0);if(active.length===1)openForm("payment",active[0]);else toast("Elige «＋ Abono» en el préstamo correspondiente.")});
 $("#close-form").addEventListener("click",closeForm);$("#cancel-form").addEventListener("click",closeForm);$("#search").addEventListener("input",render);
 $("#record-list").addEventListener("click",e=>{const pay=e.target.closest("[data-pay]"),view=e.target.closest("[data-view]");if(pay){const loan=loans.find(l=>l.id===pay.dataset.pay);if(loan)openForm("payment",loan)}if(view){const d=$("#detail-"+CSS.escape(view.dataset.view));if(d)d.hidden=!d.hidden}});
-$("#record-list").addEventListener("change",e=>{const menu=e.target.closest("[data-menu]");if(!menu||!menu.value)return;const loan=loans.find(l=>l.id===menu.dataset.menu);if(menu.value==="repeat")openForm("repeat",loan);if(menu.value==="payments")toast((loan?.payments||[]).length?loan.payments.map(p=>date(p.paid_at)+" · "+money(p.amount_cents)).join(" | "):"Este préstamo todavía no tiene abonos.");menu.value=""});
+$("#record-list").addEventListener("change",e=>{const menu=e.target.closest("[data-menu]");if(!menu||!menu.value)return;const loan=loans.find(l=>l.id===menu.dataset.menu);if(menu.value==="repeat")openForm("repeat",loan);if(menu.value==="payments"){const detail=$("#detail-"+CSS.escape(menu.dataset.menu));if(detail){detail.hidden=false;detail.scrollIntoView({behavior:"smooth",block:"nearest"})}}menu.value=""});
 async function start(){
  showAuth(true);setAuthMode("login");setConnection("Conectando…");
  try{
