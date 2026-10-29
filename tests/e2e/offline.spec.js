@@ -72,6 +72,7 @@ test("operator can create loans and payments offline and queue them durably", as
   await page.locator("#operator-pin").fill("4826");
   await page.locator("#unlock-submit").click();
   await expect(page.locator(".welcome")).toBeVisible();
+  await expect(page.locator("#entry-panel")).toBeHidden();
   await expect(page.locator("#record-list")).toContainText("Cliente de prueba");
   const localDate = await page.evaluate(() => {
     const parts = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Managua", year: "numeric", month: "2-digit", day: "2-digit" }).formatToParts(new Date());
