@@ -25,3 +25,21 @@ test("login screen can resend a confirmation email and hides the control during 
   await page.getByRole("button", { name: "Ya tengo cuenta" }).click();
   await expect(page.locator("#resend-confirmation")).toBeVisible();
 });
+
+test("password visibility toggle preserves the value and exposes its state accessibly", async ({ page }) => {
+  await page.goto("/");
+  const password = page.locator("#auth-password");
+  const toggle = page.getByRole("button", { name: "Mostrar contraseña" });
+
+  await password.fill("PruebaSegura123!");
+  await expect(password).toHaveAttribute("type", "password");
+  await toggle.click();
+  await expect(password).toHaveAttribute("type", "text");
+  await expect(password).toHaveValue("PruebaSegura123!");
+  await expect(page.getByRole("button", { name: "Ocultar contraseña" })).toHaveAttribute("aria-pressed", "true");
+
+  await page.getByRole("button", { name: "Ocultar contraseña" }).click();
+  await expect(password).toHaveAttribute("type", "password");
+  await expect(password).toHaveValue("PruebaSegura123!");
+  await expect(page.getByRole("button", { name: "Mostrar contraseña" })).toHaveAttribute("aria-pressed", "false");
+});
