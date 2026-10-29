@@ -19,7 +19,7 @@ const date = (v) => new Intl.DateTimeFormat("es-NI",{dateStyle:"medium",timeStyl
 function toast(message){const t=$("#toast");t.textContent=message;t.hidden=false;setTimeout(()=>t.hidden=true,3000)}
 function setConnection(text,ok=false){$("#connection-status").innerHTML="<strong>Conexión:</strong> "+esc(text);$("#connection-status").style.borderColor=ok?"#b7e7ce":"#f0d9a6";$("#connection-status").style.background=ok?"#f0fff6":"#fff9e9"}
 function showAuth(show){$("#auth-panel").hidden=!show;document.querySelectorAll(".app-only").forEach(n=>n.hidden=show);$("#signout-button").hidden=show}
-function setAuthMode(next){authMode=next;$("#auth-title").textContent=next==="login"?"Inicia sesión":"Crear cuenta";$("#auth-description").textContent=next==="login"?"Entra para consultar tus registros sincronizados.":"Crea tu acceso privado. Usa un correo al que puedas acceder.";$("#auth-submit").textContent=next==="login"?"Iniciar sesión":"Crear cuenta";$("#toggle-auth-mode").textContent=next==="login"?"Crear cuenta":"Ya tengo cuenta";$("#auth-name").hidden=next==="login";$("#auth-name-label").hidden=next==="login";$("#auth-password").autocomplete=next==="login"?"current-password":"new-password";$("#auth-error").hidden=true}
+function setAuthMode(next){authMode=next;$("#auth-title").textContent=next==="login"?"Inicia sesión":"Crear cuenta";$("#auth-description").textContent=next==="login"?"Entra para consultar tus registros sincronizados.":"Crea tu acceso privado. Usa un correo al que puedas acceder.";$("#auth-submit").textContent=next==="login"?"Iniciar sesión":"Crear cuenta";$("#toggle-auth-mode").textContent=next==="login"?"Crear cuenta":"Ya tengo cuenta";$("#auth-name").hidden=next==="login";$("#auth-name-label").hidden=next==="login";$("#auth-password").autocomplete=next==="login"?"current-password":"new-password";$("#resend-confirmation").hidden=next!=="login";$("#auth-error").hidden=true}
 async function sha256Hex(value) {
  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value));
  return Array.from(new Uint8Array(digest), b => b.toString(16).padStart(2,"0")).join("");
@@ -93,6 +93,20 @@ $("#amount").addEventListener("blur",()=>{try{if($("#amount").value)$("#amount")
 $("#amount").addEventListener("input",updatePreview);$("#months").addEventListener("input",updatePreview);
 $("#entry-form").addEventListener("submit",async e=>{e.preventDefault();const error=$("#form-error");error.hidden=true;const submit=e.submitter;submit.disabled=true;try{const amountCents=parseMoney($("#amount").value),note=$("#entry-note").value.trim(),months=Number($("#months").value);if(amountCents<=0)throw new Error("El monto debe ser mayor que cero.");if(entryType==="payment"){const loan=loans.find(l=>l.id===selectedLoanId);if(!loan)throw new Error("No se identificó el préstamo exacto.");if(amountCents>balance(loan))throw new Error("El abono no puede superar el saldo pendiente.");const {error:e}=await supabase.from("payments").insert({owner_id:user.id,loan_id:loan.id,amount_cents:amountCents,note});if(e)throw e}else{let customerId;if(entryType==="repeat"){const source=loans.find(l=>l.id===selectedLoanId);customerId=source?.customer_id;if(!customerId)throw new Error("No se encontró el cliente.")}else{const {data:customer,error:ce}=await supabase.from("customers").insert({owner_id:user.id,full_name:$("#client-name").value.trim(),notes:null}).select("id").single();if(ce)throw ce;customerId=customer.id}const {error:e}=await supabase.from("loans").insert({owner_id:user.id,customer_id:customerId,principal_cents:amountCents,term_months:months,note});if(e)throw e}await loadData();closeForm();toast(entryType==="payment"?"Abono guardado.":"Préstamo guardado y sincronizado.")}catch(ex){error.textContent=ex.message||"No se pudo guardar.";error.hidden=false}finally{submit.disabled=false}});
 $("#auth-form").addEventListener("submit",authSubmit);$("#toggle-auth-mode").addEventListener("click",()=>setAuthMode(authMode==="login"?"signup":"login"));
+$("#resend-confirmation").addEventListener("click",async()=>{
+ const email=$("#auth-email").value.trim(),err=$("#auth-error"),button=$("#resend-confirmation");
+ err.hidden=true;
+ if(!email){err.textContent="Escribe tu correo electrónico primero.";err.hidden=false;$("#auth-email").focus();return}
+ button.disabled=true;button.textContent="Enviando…";
+ try{
+  const emailRedirectTo=new URL("./",location.href).href;
+  const {error}=await supabase.auth.resend({type:"signup",email,options:{emailRedirectTo}});
+  if(error)throw error;
+  err.textContent="Si esa cuenta necesita confirmación, enviaremos un nuevo enlace. Revisa tu bandeja de entrada y spam; usa el enlace más reciente.";
+  err.hidden=false;
+ }catch(ex){err.textContent=ex.message||"No se pudo reenviar el correo. Verifica la dirección e inténtalo de nuevo.";err.hidden=false}
+ finally{button.disabled=false;button.textContent="Reenviar correo de confirmación"}
+});
 $("#signout-button").addEventListener("click",async()=>{await supabase.auth.signOut();user=null;userRole=null;loans=[];showAuth(true);render();setConnection("Sesión cerrada")});
 async function createOperatorInvite(){
  const err=$("#device-admin-error");err.hidden=true;
