@@ -41,20 +41,22 @@ const query=new URLSearchParams(location.search);
 const inviteFromUrl=query.get("pair");
 if(inviteFromUrl){sessionStorage.setItem(PAIR_KEY,inviteFromUrl);const cleanUrl=new URL(location.href);cleanUrl.searchParams.delete("pair");history.replaceState({},"",cleanUrl.pathname+cleanUrl.hash);}
 function status(message,ok=false){const el=$("#connection-status");if(el){el.textContent=message;el.style.borderColor=ok?"#b7e7ce":"#f0d9a6";el.style.background=ok?"#f0fff6":"#fff9e9"}const notice=$("#offline-status");if(notice){notice.textContent=message;notice.hidden=!(offlineMode||/pendiente|sin conexión|offline/i.test(message));const retry=$("#retry-sync");if(retry)retry.hidden=!(offlineMode&&isUnlocked&&navigator.onLine)}}
-function showApp(show){document.querySelectorAll(".operator-app-only").forEach(n=>n.hidden=!show);$("#pairing-panel").hidden=show;$("#lock-operator").hidden=!show}
+function showApp(show){document.querySelectorAll(".operator-app-only").forEach(n=>{n.hidden=!show||n.classList.contains("keep-hidden-until-action")});$("#pairing-panel").hidden=show;$("#lock-operator").hidden=!show}
 function toast(message){const el=$("#toast");el.textContent=message;el.hidden=false;setTimeout(()=>el.hidden=true,3000)}
 async function sha256Hex(value){const digest=await crypto.subtle.digest("SHA-256",new TextEncoder().encode(value));return Array.from(new Uint8Array(digest),b=>b.toString(16).padStart(2,"0")).join("")}
 function balance(loan){return Math.max(0,Number(loan.total_due_cents)-Number(loan.paid_cents||0))}
 function parseMoney(raw){const cleaned=String(raw).replace(/C\$/gi,"").replace(/\s/g,"").replace(/,/g,"");if(!/^\d+(\.\d{0,2})?$/.test(cleaned))throw new Error("Escribe un monto válido, por ejemplo C$ 1,250.00.");return toCents(cleaned)}
 function updatePreview(){
- if($("#terms-preview").hidden)return;
+ const preview=$("#terms-preview");
+ if(!preview)return;
  try{
   const cents=parseMoney($("#amount").value),months=Number($("#months").value);
-  if(!cents||!Number.isInteger(months)||months<1||months>120){$("#terms-preview").textContent="Interés simple fijo: 15% mensual.";return}
+  if(!cents||!Number.isInteger(months)||months<1||months>120){preview.textContent="";preview.hidden=true;return}
   const terms=calculateLoanTerms(cents,months);
   const installment=calculateMonthlyReferenceCents(terms.totalDueCents,months);
-  $("#terms-preview").textContent="Interés total: "+money(terms.interestCents)+" · Total a devolver: "+money(terms.totalDueCents)+" · Cuota mensual de referencia: "+money(installment);
- }catch{$("#terms-preview").textContent="Interés simple fijo: 15% mensual."}
+  preview.textContent="Interés total: "+money(terms.interestCents)+" · Total a devolver: "+money(terms.totalDueCents)+" · Cuota mensual de referencia: "+money(installment)+".";
+  preview.hidden=false;
+ }catch{preview.textContent="";preview.hidden=true}
 }
 function render(){
  const active=loans.filter(l=>balance(l)>0);
