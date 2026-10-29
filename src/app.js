@@ -8,7 +8,7 @@ const demoLoans = [
 ];
 let loans = loadLoans();
 let mode = "simple";
-let entryType = "loan";
+let entryType = "loan";\nlet selectedLoanId = null;
 
 function loadLoans() {
   try {
@@ -20,7 +20,7 @@ function loadLoans() {
 }
 function saveLoans() { localStorage.setItem(STORAGE_KEY, JSON.stringify(loans)); }
 function escapeHtml(value) { return String(value).replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[char]); }
-function showToast(message) {
+function formatDate(value) {\n  if (!value) return "Fecha no disponible";\n  return new Intl.DateTimeFormat("es-NI", { dateStyle: "medium", timeStyle: "short", timeZone: "America/Managua" }).format(new Date(value));\n}\nfunction showToast(message) {
   const toast = $("#toast"); toast.textContent = message; toast.hidden = false;
   window.clearTimeout(showToast.timer); showToast.timer = window.setTimeout(() => { toast.hidden = true; }, 3000);
 }
@@ -51,7 +51,7 @@ function openForm(type, client = "") {
   $("#entry-panel").hidden = false; $("#client-name").focus();
   $("#entry-panel").scrollIntoView({ behavior: "smooth", block: "start" });
 }
-function closeForm() { $("#entry-panel").hidden = true; $("#client-name").readOnly = false; }
+function closeForm() { $("#entry-panel").hidden = true; $("#client-name").readOnly = false; selectedLoanId = null; }
 $("#simple-mode").addEventListener("click", () => setMode("simple"));
 $("#owner-mode").addEventListener("click", () => setMode("owner"));
 function setMode(nextMode) {
@@ -70,7 +70,7 @@ $("#show-loan-form").addEventListener("click", () => openForm("loan"));
 $("#show-payment-form").addEventListener("click", () => openForm("payment"));
 $("#close-form").addEventListener("click", closeForm);
 $("#cancel-form").addEventListener("click", closeForm);
-$("#search").addEventListener("input", render);
+$("#search").addEventListener("input", render);\nfunction updateTermsPreview() { const principal = Number($("#amount").value); const months = Number($("#months").value); const preview = $("#terms-preview"); if (!principal || principal <= 0 || !Number.isInteger(months) || months < 1) { preview.textContent = "Interés simple: 15% por mes."; return; } const interest = Math.round(principal * 100 * 0.15 * months); const total = Math.round(principal * 100) + interest; preview.textContent = `Interés: ${formatCordobas(interest)} · Total a devolver: ${formatCordobas(total)} (sin capitalizar intereses).`; }\n$("#amount").addEventListener("input", updateTermsPreview); $("#months").addEventListener("input", updateTermsPreview);
 $("#record-list").addEventListener("click", (event) => {
   const button = event.target.closest("[data-pay]");
   if (!button) return;

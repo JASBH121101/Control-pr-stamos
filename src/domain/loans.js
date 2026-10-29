@@ -1,3 +1,5 @@
+export const MONTHLY_INTEREST_RATE = 0.15;
+
 export function toCents(value) {
   const amount = typeof value === "string" ? Number(value.trim()) : value;
   if (!Number.isFinite(amount) || amount < 0) throw new RangeError("El importe debe ser un número no negativo.");
@@ -9,11 +11,19 @@ export function formatCordobas(cents) {
   return new Intl.NumberFormat("es-NI", { style: "currency", currency: "NIO" }).format(cents / 100);
 }
 
-export function createLoan({ id, client, principalCents, note = "", createdAt = new Date().toISOString() }) {
+export function calculateLoanTerms(principalCents, months, monthlyRate = MONTHLY_INTEREST_RATE) {
+  if (!Number.isSafeInteger(principalCents) || principalCents <= 0) throw new RangeError("El préstamo debe ser mayor que cero.");
+  if (!Number.isInteger(months) || months < 1 || months > 120) throw new RangeError("El plazo debe estar entre 1 y 120 meses.");
+  if (monthlyRate !== MONTHLY_INTEREST_RATE) throw new RangeError("La tasa mensual está fijada en 15%.");
+  const interestCents = Math.round(principalCents * monthlyRate * months);
+  return { interestCents, totalDueCents: principalCents + interestCents, months, monthlyRate };
+}
+
+export function createLoan({ id, client, principalCents, months = 1, note = "", createdAt = new Date().toISOString() }) {
   const normalizedClient = String(client ?? "").trim();
   if (!normalizedClient) throw new Error("El nombre del cliente es obligatorio.");
-  if (!Number.isSafeInteger(principalCents) || principalCents <= 0) throw new RangeError("El préstamo debe ser mayor que cero.");
-  return { id, client: normalizedClient, principalCents, paidCents: 0, note: String(note).trim(), createdAt, payments: [] };
+  const terms = calculateLoanTerms(principalCents, months);
+  return { id, client: normalizedClient, principalCents, ...terms, paidCents: 0, note: String(note).trim(), createdAt, payments: [] };
 }
 
 export function recordPayment(loan, { amountCents, note = "", paidAt = new Date().toISOString() }) {
@@ -21,12 +31,11 @@ export function recordPayment(loan, { amountCents, note = "", paidAt = new Date(
   const balanceCents = getBalance(loan);
   if (amountCents > balanceCents) throw new RangeError("El abono no puede superar el saldo pendiente.");
   const payment = { id: globalThis.crypto?.randomUUID?.() ?? String(Date.now()), amountCents, note: String(note).trim(), paidAt };
-  const payments = [...loan.payments, payment];
-  return { ...loan, paidCents: loan.paidCents + amountCents, payments };
+  return { ...loan, paidCents: loan.paidCents + amountCents, payments: [...loan.payments, payment] };
 }
 
 export function getBalance(loan) {
-  return Math.max(0, loan.principalCents - loan.paidCents);
+  return Math.max(0, (loan.totalDueCents ?? loan.principalCents) - loan.paidCents);
 }
 
 export function summarizeLoans(loans) {
@@ -34,7 +43,9 @@ export function summarizeLoans(loans) {
     summary.principalCents += loan.principalCents;
     summary.paidCents += loan.paidCents;
     summary.outstandingCents += getBalance(loan);
+    summary.interestExpectedCents += loan.interestCents ?? 0;
+    summary.interestCollectedCents += Math.max(0, Math.min(loan.interestCents ?? 0, loan.paidCents - loan.principalCents));
     if (getBalance(loan) > 0) summary.activeCount += 1;
     return summary;
-  }, { principalCents: 0, paidCents: 0, outstandingCents: 0, activeCount: 0 });
+  }, { principalCents: 0, paidCents: 0, outstandingCents: 0, interestExpectedCents: 0, interestCollectedCents: 0, activeCount: 0 });
 }
