@@ -79,22 +79,29 @@ async function loadData(){const sb=await getSupabase();const [loanResult,custome
 async function syncPending(){if(!navigator.onLine||offlineMode)throw new TypeError("Sin conexión segura para sincronizar.");const sb=await getSupabase();while(true){const vault=getVault();if(!vault.queue.length){await saveVault({...vault,lastSyncAt:new Date().toISOString()});return}const op=vault.queue[0];const {error}=await sb.from(op.entity).upsert(op.record,{onConflict:"id"});if(error)throw error;await saveVault({...vault,queue:vault.queue.slice(1),lastSyncAt:new Date().toISOString()});status("Sincronizando registros pendientes…")}}
 function openForm(type,loan=null){
  entryType=type;selectedLoanId=loan?.id||null;
- const isPayment=type==="payment";
- $("#entry-title").textContent=type==="loan"?"Registrar préstamo":type==="repeat"?"Prestar de nuevo":"Registrar abono";
- $("#client-name").value=loan?.customers?.full_name||"";
- $("#client-name").readOnly=Boolean(loan);
- $("#client-phone").value=loan?.customers?.phone||"";
- $("#client-phone").readOnly=Boolean(loan);
- $("#client-phone-field").hidden=isPayment;
+ const isPayment=type==="payment",isRepeat=type==="repeat";
+ $("#entry-title").textContent=type==="loan"?"Registrar préstamo":isRepeat?"Prestar de nuevo":"Registrar abono";
+ // Start every capture field empty; a linked loan is identified by context, not prefilled inputs.
+ $("#client-name").value="";$("#client-name").readOnly=false;$("#client-name").required=type==="loan";
+ $("#client-phone").value="";$("#client-phone").readOnly=false;
+ $("#client-name-field").hidden=isPayment||isRepeat;
+ $("#client-phone-field").hidden=isPayment||isRepeat;
+ const context=$("#selected-client-context");
+ context.hidden=!(isPayment||isRepeat);
+ context.textContent=isPayment
+  ?"Este abono se aplicará al préstamo de "+(loan?.customers?.full_name||"este cliente")+"."
+  :"El nuevo préstamo se asociará al cliente "+(loan?.customers?.full_name||"seleccionado")+".";
  $("#loan-date-field").hidden=isPayment;
  $("#payment-date-field").hidden=!isPayment;
  $("#loan-date").required=!isPayment;$("#payment-date").required=isPayment;
  $("#loan-date").max=todayLocalDate();$("#payment-date").max=todayLocalDate();
- $("#loan-date").value=todayLocalDate();$("#payment-date").value=todayLocalDate();
- $("#months-field").hidden=isPayment;$("#months").required=!isPayment;$("#months").value="1";
+ $("#loan-date").value="";$("#payment-date").value="";
+ $("#months-field").hidden=isPayment;$("#months").required=!isPayment;$("#months").value="";
  $("#terms-preview").hidden=isPayment;$("#amount").value="";$("#entry-note").value="";
  $("#form-error").hidden=true;updatePreview();$("#entry-panel").hidden=false;
- $("#client-name").focus();$("#entry-panel").scrollIntoView({behavior:"smooth",block:"start"});
+ if(!isPayment&&!isRepeat)$("#client-name").focus();
+ else $("#amount").focus();
+ $("#entry-panel").scrollIntoView({behavior:"smooth",block:"start"});
 }
 function closeForm(){$("#entry-panel").hidden=true;$("#client-name").readOnly=false;selectedLoanId=null}
 async function saveEntry(event){
