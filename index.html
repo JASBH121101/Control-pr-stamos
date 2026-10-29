@@ -17,12 +17,12 @@
     </div>
   </header>
   <main class="shell">
-    <section class="welcome">
+    <section class="welcome app-only">
       <p class="eyebrow">CONTROL DIARIO</p>
       <h1 id="page-title">¿Qué vamos a hacer hoy?</h1>
       <p id="page-description">Registra un préstamo o un abono en pocos pasos.</p>
     </section>
-    <section class="summary-grid" aria-label="Resumen de préstamos">
+    <section class="summary-grid app-only" aria-label="Resumen de préstamos">
       <article class="summary-card"><span>Por cobrar</span><strong id="outstanding-total">C$ 0.00</strong><small>Saldo pendiente total</small></article>
       <article class="summary-card"><span>Préstamos activos</span><strong id="active-count">0</strong><small>Personas con saldo pendiente</small></article>
       <article class="summary-card owner-only" hidden><span>Capital entregado</span><strong id="lent-total">C$ 0.00</strong><small>Total registrado</small></article>
@@ -30,11 +30,11 @@
       <article class="summary-card owner-only" hidden><span>Interés cobrado</span><strong id="interest-collected">C$ 0.00</strong><small>Ganancia realizada</small></article>
       <article class="summary-card owner-only" hidden><span>Interés por cobrar</span><strong id="interest-expected">C$ 0.00</strong><small>No cuenta aún como ganancia</small></article>
     </section>
-    <section class="action-grid" aria-label="Acciones principales">
+    <section class="action-grid app-only" aria-label="Acciones principales">
       <button class="action-card primary-action" id="show-loan-form" type="button"><span class="action-icon" aria-hidden="true">＋</span><span><strong>Registrar préstamo</strong><small>Anotar dinero entregado</small></span><span class="chevron" aria-hidden="true">›</span></button>
       <button class="action-card" id="show-payment-form" type="button"><span class="action-icon payment-icon" aria-hidden="true">✓</span><span><strong>Registrar abono</strong><small>Anotar un pago recibido</small></span><span class="chevron" aria-hidden="true">›</span></button>
     </section>
-    <section class="panel" id="entry-panel" hidden aria-labelledby="entry-title">
+    <section class="panel app-only" id="entry-panel" hidden aria-labelledby="entry-title">
       <div class="panel-heading"><div><p class="eyebrow">NUEVO REGISTRO</p><h2 id="entry-title">Registrar préstamo</h2></div><button id="close-form" class="icon-button" type="button" aria-label="× Cerrar formulario">×</button></div>
       <form id="entry-form">
         <input id="entry-type" type="hidden" value="loan">
@@ -50,16 +50,16 @@
         <div class="form-actions"><button class="secondary-button" id="cancel-form" type="button">Cancelar</button><button class="primary-button" type="submit">Guardar registro</button></div>
       </form>
     </section>
-    <section class="panel" aria-labelledby="records-title">
+    <section class="panel app-only" aria-labelledby="records-title">
       <div class="panel-heading records-heading"><div><p class="eyebrow">REGISTROS</p><h2 id="records-title">Préstamos pendientes</h2></div><label class="search-box"><span class="sr-only">Buscar cliente</span><input id="search" type="search" placeholder="Buscar cliente…"></label></div>
       <p class="empty-state" id="empty-state">Todavía no hay préstamos. Usa “Registrar préstamo” para comenzar.</p>
       <div class="record-list" id="record-list" aria-live="polite"></div>
       <div class="owner-history owner-only" hidden><h3>Historial de movimientos</h3><div id="history-list"></div></div>
     </section>
     <p class="demo-notice"><strong>Prototipo de prueba:</strong> los registros se guardan solo en este navegador. No uses todavía información financiera real.</p>
-    <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+    <div id="toast" class="toast app-only" role="status" aria-live="polite" hidden></div>
   </main>
-  <footer>Control Préstamos · Versión inicial de demostración</footer>
+  <footer class="app-only">Control Préstamos · Datos sincronizados</footer>
   <script type="module" src="./src/app.js?v=20261029-2"></script>
 </body>
 </html>
