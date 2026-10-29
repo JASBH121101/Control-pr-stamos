@@ -135,3 +135,44 @@ test("operator can create loans and payments offline and queue them durably", as
   });
   expect(afterReload).toBe(3);
 });
+
+
+test("encrypted vault can be unlocked by a PRF-derived biometric key while retaining PIN fallback", async ({ page }) => {
+  await page.goto("/operador.html");
+  const result = await page.evaluate(async () => {
+    const store = await import("./src/offline-store.js");
+    const ownerId = crypto.randomUUID();
+    const userId = crypto.randomUUID();
+    const now = new Date().toISOString();
+    await store.createVault("4826", {
+      ownerId, userId, customers: [{ id: crypto.randomUUID(), owner_id: ownerId, full_name: "Biometric Test", created_at: now, updated_at: now }],
+      loans: [], queue: [], lastSyncAt: now
+    });
+    const prfOutput = crypto.getRandomValues(new Uint8Array(32));
+    const prfSalt = crypto.getRandomValues(new Uint8Array(32));
+    await store.enableBiometricUnlock({
+      credentialId: "Y3JlZGVudGlhbC10ZXN0",
+      rpId: location.hostname,
+      prfSalt,
+      prfOutput
+    });
+    const metadata = await store.getBiometricInfo();
+    store.lockVault();
+    const biometricVault = await store.unlockVaultWithBiometric(prfOutput);
+    const biometricName = store.getVault().customers[0].full_name;
+    store.lockVault();
+    const pinVault = await store.unlockVault("4826");
+    const pinName = store.getVault().customers[0].full_name;
+    store.lockVault();
+    return {
+      hasCredential: metadata?.credentialId === "Y3JlZGVudGlhbC10ZXN0",
+      ownerMatches: biometricVault.ownerId === ownerId && pinVault.ownerId === ownerId,
+      biometricName,
+      pinName
+    };
+  });
+  expect(result.hasCredential).toBeTruthy();
+  expect(result.ownerMatches).toBeTruthy();
+  expect(result.biometricName).toBe("Biometric Test");
+  expect(result.pinName).toBe("Biometric Test");
+});
