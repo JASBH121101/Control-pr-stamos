@@ -81,7 +81,10 @@ test("operator can create loans and payments offline and queue them durably", as
   });
 
   await page.locator("[data-pay]").first().click();
+  await expect(page.locator("#entry-panel")).toBeVisible();
+  await expect(page.locator("#payment-date")).toHaveClass(/date-empty/);
   await page.locator("#payment-date").fill(localDate);
+  await expect(page.locator("#payment-date")).not.toHaveClass(/date-empty/);
   await page.locator("#amount").fill("5.00");
   await page.locator("#entry-note").fill("Abono sin conexión");
   await page.locator("#entry-form button[type=submit]").click();
