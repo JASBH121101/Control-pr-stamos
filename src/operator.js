@@ -12,7 +12,7 @@ async function getSupabase() {
   return supabase;
 }
 function isNetworkError(error) {
-  return !navigator.onLine || error instanceof TypeError || /failed to fetch|fetch failed|network|load failed|sin conexión|connection/i.test(String(error?.message || ""));
+  return !navigator.onLine || /failed to fetch|fetch failed|network|load failed|sin conexión|connection/i.test(String(error?.message || ""));
 }
 const $ = s => document.querySelector(s);
 const money = cents => formatCordobas(Number(cents || 0));
@@ -105,10 +105,11 @@ async function handleUnlock(event){
  try{
   if(!navigator.onLine){await unlockOffline(pin);return}
   const sb=await getSupabase();
+  const {data:{session},error:sessionError}=await sb.auth.getSession();if(sessionError)throw sessionError;
+  if(session){user=session.user}else{const {data:anonymous,error:authError}=await sb.auth.signInAnonymously();if(authError)throw authError;user=anonymous.user}
   const {data,error}=await sb.rpc("verify_operator_pin",{p_pin:pin});if(error)throw error;
   if(data!==true){err.textContent="PIN incorrecto o acceso bloqueado temporalmente. Tras varios intentos, espera 5 minutos.";err.hidden=false;$("#operator-pin").value="";$("#operator-pin").focus();return}
-  if(!user){const {data:{session},error:sessionError}=await sb.auth.getSession();if(sessionError)throw sessionError;user=session?.user||null}
-  if(!user?.id)throw new Error("No se pudo recuperar la identidad del dispositivo. Recarga la aplicación con Internet.");
+  if(!user?.id||!user.is_anonymous)throw new Error("La identidad del dispositivo no es válida.");
   const {data:device,error:deviceError}=await sb.from("operator_devices").select("owner_id,is_active").eq("auth_user_id",user.id).maybeSingle();if(deviceError)throw deviceError;
   if(!device?.is_active)throw new Error("El propietario revocó este dispositivo. Pídele un enlace nuevo.");
   ownerId=device.owner_id;
@@ -169,7 +170,7 @@ document.addEventListener("input",()=>{void noteActivity()});
 document.addEventListener("visibilitychange",()=>{if(document.hidden&&isUnlocked)void lockToPin("La aplicación se bloqueó al quedar en segundo plano.")});
 window.addEventListener("pagehide",()=>{if(user&&!offlineMode&&navigator.onLine)void getSupabase().then(sb=>sb.rpc("lock_operator_session")).catch(()=>{})});
 window.addEventListener("offline",()=>{if(isUnlocked){offlineMode=true;status("Sin conexión. Los nuevos movimientos se guardarán localmente.");}});
-window.addEventListener("online",()=>{if(isUnlocked&&offlineMode){void lockToPin("Conexión recuperada. Introduce tu PIN para verificar el dispositivo y sincronizar los movimientos pendientes.");}else if(!isUnlocked){void openOperatorSession().catch(async ex=>{if(await hasVault()){showPairForm("unlock");status("La conexión volvió, pero no se pudo contactar con el servidor. Puedes entrar localmente con tu PIN.");}else status(ex.message||"No se pudo conectar.");});}});
+window.addEventListener("online",()=>{if(isUnlocked&&offlineMode){void lockToPin("Conexión recuperada. Introduce tu PIN para verificar el dispositivo y sincronizar los movimientos pendientes.").then(()=>openOperatorSession()).catch(()=>{});}else if(!isUnlocked){void openOperatorSession().catch(async ex=>{if(await hasVault()){showPairForm("unlock");status("La conexión volvió, pero no se pudo contactar con el servidor. Puedes entrar localmente con tu PIN.");}else status(ex.message||"No se pudo conectar.");});}});
 $("#entry-form").addEventListener("submit",saveEntry);$("#amount").addEventListener("blur",()=>{try{if($("#amount").value)$("#amount").value=money(parseMoney($("#amount").value))}catch{}});$("#amount").addEventListener("input",updatePreview);$("#months").addEventListener("input",updatePreview);
 $("#show-loan-form").addEventListener("click",()=>openForm("loan"));$("#show-payment-form").addEventListener("click",()=>{const active=loans.filter(l=>balance(l)>0);if(active.length===1)openForm("payment",active[0]);else toast("Elige «＋ Abono» en el préstamo correspondiente.")});$("#close-form").addEventListener("click",closeForm);$("#cancel-form").addEventListener("click",closeForm);$("#search").addEventListener("input",render);
 $("#record-list").addEventListener("click",e=>{const pay=e.target.closest("[data-pay]"),view=e.target.closest("[data-view]");if(pay){const loan=loans.find(l=>l.id===pay.dataset.pay);if(loan)openForm("payment",loan)}if(view){const details=$("#detail-"+CSS.escape(view.dataset.view));if(details)details.hidden=!details.hidden}});
