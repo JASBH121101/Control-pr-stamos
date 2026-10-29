@@ -36,14 +36,14 @@ function render() {
   $("#lent-total").textContent = formatCordobas(summary.principalCents);
   $("#paid-total").textContent = formatCordobas(summary.paidCents);
   const query = $("#search").value.trim().toLocaleLowerCase("es");
-  const filtered = loans.filter((loan) => loan.client.toLocaleLowerCase("es").includes(query) && getBalance(loan) > 0);
+  const filtered = loans.filter((loan) => loan.client.toLocaleLowerCase("es").includes(query));
   $("#empty-state").hidden = filtered.length > 0;
   $("#empty-state").textContent = query ? "No encontramos préstamos pendientes con ese nombre." : "No hay préstamos pendientes. Puedes registrar uno nuevo.";
   $("#record-list").innerHTML = filtered.map((loan) => `
     <article class="record-card">
       <div class="record-avatar" aria-hidden="true">${escapeHtml(loan.client.slice(0, 1).toUpperCase())}</div>
       <div class="record-main"><h3>${escapeHtml(loan.client)}</h3><p>Capital: ${formatCordobas(loan.principalCents)} · ${loan.months ?? 1} mes(es) al 15%</p><p>Total acordado: ${formatCordobas(loan.totalDueCents ?? loan.principalCents)}</p><small>Registrado: ${formatDate(loan.createdAt)}</small>${loan.note ? `<small>${escapeHtml(loan.note)}</small>` : ""}</div>
-      <div class="record-balance"><span>Saldo pendiente</span><strong>${formatCordobas(getBalance(loan))}</strong><div class="record-actions"><button class="small-pay-button" data-pay="${escapeHtml(loan.id)}" type="button">＋ Abono</button><button class="small-repeat-button" data-repeat="${escapeHtml(loan.id)}" type="button">↻ Prestar de nuevo</button></div></div>
+      <div class="record-balance"><span>Saldo pendiente</span><strong>${formatCordobas(getBalance(loan))}</strong><div class="record-actions"><button class="small-pay-button" data-pay="${escapeHtml(loan.id)}" type="button" ${getBalance(loan) <= 0 ? "disabled" : ""}>＋ Abono</button><button class="small-repeat-button" data-repeat="${escapeHtml(loan.id)}" type="button">↻ Prestar de nuevo</button></div></div>
     </article>`).join("");
   $("#history-list").innerHTML = loans.length ? loans.slice().reverse().map((loan) => `<div class="history-row"><strong>${escapeHtml(loan.client)}</strong><span>Préstamo ${formatCordobas(loan.principalCents)}</span><span>Abonado ${formatCordobas(loan.paidCents)}</span><span>Pendiente ${formatCordobas(getBalance(loan))}</span><span>Registrado ${formatDate(loan.createdAt)}</span></div>`).join("") : "<p>Sin movimientos registrados.</p>";
 }
@@ -82,7 +82,7 @@ function setMode(nextMode) {
   $("#records-title").textContent = mode === "simple" ? "Préstamos pendientes" : "Cartera de préstamos";
 }
 $("#show-loan-form").addEventListener("click", () => openForm("loan"));
-$("#show-payment-form").addEventListener("click", () => openForm("payment"));
+$("#show-payment-form").addEventListener("click", () => { const active = loans.filter((loan) => getBalance(loan) > 0); if (active.length === 1) openForm("payment", active[0].client, active[0].id); else showToast("Selecciona «＋ Abono» en la tarjeta del préstamo exacto."); });
 $("#close-form").addEventListener("click", closeForm);
 $("#cancel-form").addEventListener("click", closeForm);
 $("#search").addEventListener("input", render);
