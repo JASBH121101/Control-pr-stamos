@@ -34,7 +34,9 @@ function render() {
   $("#outstanding-total").textContent = formatCordobas(summary.outstandingCents);
   $("#active-count").textContent = String(summary.activeCount);
   $("#lent-total").textContent = formatCordobas(summary.principalCents);
-  $("#paid-total").textContent = formatCordobas(summary.paidCents);\n  $("#interest-collected").textContent = formatCordobas(summary.interestCollectedCents);\n  $("#interest-expected").textContent = formatCordobas(summary.interestExpectedCents);
+  $("#paid-total").textContent = formatCordobas(summary.paidCents);
+  $("#interest-collected").textContent = formatCordobas(summary.interestCollectedCents);
+  $("#interest-expected").textContent = formatCordobas(summary.interestExpectedCents);
   const query = $("#search").value.trim().toLocaleLowerCase("es");
   const filtered = loans.filter((loan) => loan.client.toLocaleLowerCase("es").includes(query));
   $("#empty-state").hidden = filtered.length > 0;

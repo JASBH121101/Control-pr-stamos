@@ -26,7 +26,9 @@
       <article class="summary-card"><span>Por cobrar</span><strong id="outstanding-total">C$ 0.00</strong><small>Saldo pendiente total</small></article>
       <article class="summary-card"><span>Préstamos activos</span><strong id="active-count">0</strong><small>Personas con saldo pendiente</small></article>
       <article class="summary-card owner-only" hidden><span>Capital entregado</span><strong id="lent-total">C$ 0.00</strong><small>Total registrado</small></article>
-      <article class="summary-card owner-only" hidden><span>Abonos recibidos</span><strong id="paid-total">C$ 0.00</strong><small>Total recibido</small></article>\n      <article class="summary-card owner-only" hidden><span>Interés cobrado</span><strong id="interest-collected">C$ 0.00</strong><small>Ganancia realizada</small></article>\n      <article class="summary-card owner-only" hidden><span>Interés por cobrar</span><strong id="interest-expected">C$ 0.00</strong><small>No cuenta aún como ganancia</small></article>
+      <article class="summary-card owner-only" hidden><span>Abonos recibidos</span><strong id="paid-total">C$ 0.00</strong><small>Total recibido</small></article>
+      <article class="summary-card owner-only" hidden><span>Interés cobrado</span><strong id="interest-collected">C$ 0.00</strong><small>Ganancia realizada</small></article>
+      <article class="summary-card owner-only" hidden><span>Interés por cobrar</span><strong id="interest-expected">C$ 0.00</strong><small>No cuenta aún como ganancia</small></article>
     </section>
     <section class="action-grid" aria-label="Acciones principales">
       <button class="action-card primary-action" id="show-loan-form" type="button"><span class="action-icon" aria-hidden="true">＋</span><span><strong>Registrar préstamo</strong><small>Anotar dinero entregado</small></span><span class="chevron" aria-hidden="true">›</span></button>
@@ -40,7 +42,9 @@
         <input id="client-name" name="client" autocomplete="name" placeholder="Ej. María López" required maxlength="80">
         <label for="amount">Monto en córdobas</label>
         <input id="amount" name="amount" type="number" min="0.01" step="0.01" inputmode="decimal" placeholder="0.00" required>
-        <div id="months-field"><label for="months">Plazo (meses)</label><input id="months" name="months" type="number" min="1" max="120" step="1" value="1" required><small class="field-hint">Interés simple fijo: 15% mensual. No se capitaliza.</small></div>\n        <p class="terms-preview" id="terms-preview" aria-live="polite">Interés simple: 15% por mes.</p>\n        <label for="entry-note">Nota (opcional)</label>
+        <div id="months-field"><label for="months">Plazo (meses)</label><input id="months" name="months" type="number" min="1" max="120" step="1" value="1" required><small class="field-hint">Interés simple fijo: 15% mensual. No se capitaliza.</small></div>
+        <p class="terms-preview" id="terms-preview" aria-live="polite">Interés simple: 15% por mes.</p>
+        <label for="entry-note">Nota (opcional)</label>
         <input id="entry-note" name="note" maxlength="160" placeholder="Fecha acordada, referencia…">
         <p class="form-error" id="form-error" role="alert" hidden></p>
         <div class="form-actions"><button class="secondary-button" id="cancel-form" type="button">Cancelar</button><button class="primary-button" type="submit">Guardar registro</button></div>
