@@ -245,7 +245,7 @@ const query=new URLSearchParams(location.search);
 const inviteFromUrl=query.get("pair");
 if(inviteFromUrl){sessionStorage.setItem(PAIR_KEY,inviteFromUrl);const cleanUrl=new URL(location.href);cleanUrl.searchParams.delete("pair");history.replaceState({},"",cleanUrl.pathname+cleanUrl.hash);}
 function status(message,ok=false){const el=$("#connection-status");if(el){el.textContent=message;el.style.borderColor=ok?"#b7e7ce":"#f0d9a6";el.style.background=ok?"#f0fff6":"#fff9e9"}const notice=$("#offline-status");if(notice){notice.textContent=message;notice.hidden=!(offlineMode||/pendiente|sin conexión|offline/i.test(message));const retry=$("#retry-sync");if(retry)retry.hidden=!(offlineMode&&isUnlocked&&navigator.onLine)}}
-function showApp(show){document.querySelectorAll(".operator-app-only").forEach(n=>{n.hidden=!show||n.classList.contains("keep-hidden-until-action")});$("#pairing-panel").hidden=show;$("#lock-operator").hidden=!show}
+function showApp(show){document.querySelectorAll(".operator-app-only").forEach(n=>{n.hidden=!show||n.classList.contains("keep-hidden-until-action")});$("#pairing-panel").hidden=show;$("#lock-operator").hidden=!show;void refreshBiometricControls()}
 function toast(message){const el=$("#toast");el.textContent=message;el.hidden=false;setTimeout(()=>el.hidden=true,3000)}
 async function sha256Hex(value){const digest=await crypto.subtle.digest("SHA-256",new TextEncoder().encode(value));return Array.from(new Uint8Array(digest),b=>b.toString(16).padStart(2,"0")).join("")}
 function balance(loan){return Math.max(0,Number(loan.total_due_cents)-Number(loan.paid_cents||0))}
@@ -415,7 +415,7 @@ async function handleUnlock(event){
   }else{err.textContent=ex.message||"No se pudo desbloquear.";err.hidden=false}
  }finally{button.disabled=false}
 }
-function showPairForm(type){showApp(false);$("#pair-setup-form").hidden=type!=="setup";$("#pin-unlock-form").hidden=type!=="unlock";$("#pair-error").hidden=true;$("#unlock-error").hidden=true}
+function showPairForm(type){showApp(false);$("#pair-setup-form").hidden=type!=="setup";$("#pin-unlock-form").hidden=type!=="unlock";$("#pair-error").hidden=true;$("#unlock-error").hidden=true;void refreshBiometricControls()}
 function armIdleLock(){clearTimeout(idleTimer);idleTimer=setTimeout(()=>{void lockToPin("Se bloqueó por inactividad. Introduce el PIN para continuar.")},120000)}
 async function lockToPin(message="Aplicación bloqueada."){
   clearTimeout(idleTimer);
@@ -448,6 +448,9 @@ async function openOperatorSession(){
 }
 $("#pair-setup-form").addEventListener("submit",handleSetupPair);$("#retry-sync").addEventListener("click",()=>{void lockToPin("Vuelve a introducir tu PIN para autorizar la sincronización con el servidor.")});
 $("#pin-unlock-form").addEventListener("submit",handleUnlock);
+$("#biometric-unlock").addEventListener("click",handleBiometricUnlock);
+$("#enable-biometric").addEventListener("click",handleBiometricSetup);
+$("#disable-biometric").addEventListener("click",handleBiometricRemoval);
 $("#lock-operator").addEventListener("click",()=>{void lockToPin("Aplicación bloqueada manualmente.")});
 document.addEventListener("pointerdown",()=>{void noteActivity()},{passive:true});
 document.addEventListener("keydown",()=>{void noteActivity()});
