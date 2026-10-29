@@ -14,7 +14,7 @@ async function getSupabase() {
 function isNetworkError(error) {
   return !navigator.onLine || error instanceof TypeError || /failed to fetch|fetch failed|network|load failed|sin conexión|connection/i.test(String(error?.message || ""));
 }
-const $ = s => document.querySelector(s);const $ = s => document.querySelector(s);
+const $ = s => document.querySelector(s);
 const money = cents => formatCordobas(Number(cents || 0));
 const esc = value => String(value ?? "").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 const date = value => new Intl.DateTimeFormat("es-NI",{dateStyle:"medium",timeStyle:"short",timeZone:"America/Managua"}).format(new Date(value));
