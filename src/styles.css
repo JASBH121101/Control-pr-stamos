@@ -27,3 +27,36 @@
 .history-row{grid-template-columns:1.2fr repeat(4,minmax(0,1fr));align-items:start;overflow-wrap:anywhere}
 @media(max-width:760px){.history-row{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.history-row strong{grid-column:1/-1}}
 #entry-form input[type=date]{min-height:44px}
+
+
+/* Owner dashboard hierarchy and trusted-device management */
+.section-heading{grid-column:1/-1;min-width:0;padding:2px 2px 5px;margin:0 0 2px}
+.section-heading .eyebrow{margin-bottom:5px}
+.section-heading h2{margin:0;color:var(--navy);font-size:clamp(18px,2.5vw,22px);letter-spacing:-.025em}
+.section-heading>p:last-child{margin:6px 0 0;color:var(--muted);font-size:13px;line-height:1.45}
+.owner-records-panel,.device-management{scroll-margin-top:18px}
+.owner-records-panel .panel-heading,.device-management .panel-heading{margin-bottom:14px}
+.owner-records-panel .empty-state{margin:0}
+.device-management{margin-top:18px}
+.device-row{flex-wrap:wrap;align-items:center}
+.device-meta{flex:1 1 180px;min-width:0}
+.device-meta strong{overflow-wrap:anywhere}
+.device-actions{display:flex;align-items:center;justify-content:flex-end;flex-wrap:wrap;gap:7px}
+.device-rename{border:1px solid #cddce8;background:#f5f9fc;color:#234b67;border-radius:8px;padding:7px 9px;font:inherit;font-size:11px;font-weight:800;cursor:pointer;min-height:32px}
+.device-rename:hover{background:#eaf3fa}
+.device-rename-form{flex:1 0 100%;display:grid;gap:8px;margin-top:5px;padding:12px;border:1px solid var(--line);border-radius:11px;background:#f8fbfd}
+.device-rename-form[hidden]{display:none}
+.device-rename-form label{font-size:12px;font-weight:750;color:#31485a}
+.device-rename-form input{width:100%;min-width:0;padding:10px 12px;border:1px solid #cdd8e2;border-radius:9px;background:#fff;color:var(--navy);font:inherit;font-size:14px}
+.device-rename-actions{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:8px}
+.device-rename-actions .primary-button,.device-rename-actions .secondary-button{min-height:36px;padding:8px 12px;font-size:12px}
+.keep-hidden-until-action[hidden]{display:none!important}
+@media(max-width:560px){
+ .section-heading{padding:0 1px 3px}
+ .section-heading>p:last-child{font-size:12px}
+ .device-row{gap:9px}
+ .device-meta{flex-basis:calc(100% - 4px)}
+ .device-actions{width:100%;justify-content:flex-start}
+ .device-rename-form{padding:10px}
+ .device-rename-actions>*{flex:1}
+}
