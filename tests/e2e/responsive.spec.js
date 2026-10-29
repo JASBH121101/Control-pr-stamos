@@ -6,7 +6,7 @@ for (const width of [360,390,430,768,1024,1280,1440]) {
     await page.goto("/");
     await expect(page.locator(".topbar")).toBeVisible();
     await expect(page.locator("#auth-panel")).toBeVisible();
-    await expect(page.getByRole("button",{name:"Aumentar tamaño de texto"})).toBeVisible();
+    await expect(page.getByRole("slider",{name:"Nivel de tamaño del texto"})).toBeVisible();
     await expect(page.getByLabel("Correo electrónico")).toBeVisible();
     const dims=await page.evaluate(()=>({viewport:window.innerWidth,document:document.documentElement.scrollWidth,body:document.body.scrollWidth}));
     expect(dims.document,JSON.stringify(dims)).toBeLessThanOrEqual(width);
