@@ -138,24 +138,29 @@ function render(){
 async function loadData(){const {data,error}=await supabase.from("loans").select("*, customers(full_name,phone), payments(id,amount_cents,paid_at,note)").order("created_at",{ascending:false});if(error)throw error;loans=(data||[]).map(l=>({...l,paid_cents:(l.payments||[]).reduce((s,p)=>s+Number(p.amount_cents),0)}));render()}
 function openForm(type,loan=null){
  entryType=type;selectedLoanId=loan?.id||null;
- const isPayment=type==="payment";
- $("#entry-title").textContent=type==="loan"?"Registrar préstamo":type==="repeat"?"Prestar de nuevo":"Registrar abono";
- $("#client-name").value=loan?.customers?.full_name||"";
- $("#client-name").readOnly=Boolean(loan);
- $("#client-phone").value=loan?.customers?.phone||"";
- $("#client-phone").readOnly=Boolean(loan);
- $("#client-phone-field").hidden=isPayment;
+ const isPayment=type==="payment",isRepeat=type==="repeat";
+ $("#entry-title").textContent=type==="loan"?"Registrar préstamo":isRepeat?"Prestar de nuevo":"Registrar abono";
+ // Start every capture field empty; a linked loan is identified by context, not prefilled inputs.
+ $("#client-name").value="";$("#client-name").readOnly=false;$("#client-name").required=type==="loan";
+ $("#client-phone").value="";$("#client-phone").readOnly=false;
+ $("#client-name-field").hidden=isPayment||isRepeat;
+ $("#client-phone-field").hidden=isPayment||isRepeat;
+ const context=$("#selected-client-context");
+ context.hidden=!(isPayment||isRepeat);
+ context.textContent=isPayment
+  ?"Este abono se aplicará al préstamo de "+(loan?.customers?.full_name||"este cliente")+"."
+  :"El nuevo préstamo se asociará al cliente "+(loan?.customers?.full_name||"seleccionado")+".";
  $("#loan-date-field").hidden=isPayment;
  $("#payment-date-field").hidden=!isPayment;
- $("#loan-date").required=!isPayment;
- $("#payment-date").required=isPayment;
+ $("#loan-date").required=!isPayment;$("#payment-date").required=isPayment;
  $("#loan-date").max=todayLocalDate();$("#payment-date").max=todayLocalDate();
- $("#loan-date").value=todayLocalDate();
- $("#payment-date").value=todayLocalDate();
- $("#months-field").hidden=isPayment;$("#months").required=!isPayment;$("#months").value="1";
+ $("#loan-date").value="";$("#payment-date").value="";
+ $("#months-field").hidden=isPayment;$("#months").required=!isPayment;$("#months").value="";
  $("#terms-preview").hidden=isPayment;$("#amount").value="";$("#entry-note").value="";
  $("#form-error").hidden=true;updatePreview();$("#entry-panel").hidden=false;
- $("#client-name").focus();$("#entry-panel").scrollIntoView({behavior:"smooth",block:"start"});
+ if(!isPayment&&!isRepeat)$("#client-name").focus();
+ else $("#amount").focus();
+ $("#entry-panel").scrollIntoView({behavior:"smooth",block:"start"});
 }
 function closeForm(){$("#entry-panel").hidden=true;$("#client-name").readOnly=false;selectedLoanId=null}
 function parseMoney(raw){const cleaned=String(raw).replace(/C\$/gi,"").replace(/\s/g,"").replace(/,/g,"");if(!/^\d+(\.\d{0,2})?$/.test(cleaned))throw new Error("Escribe un monto válido, por ejemplo C$ 1,250.00.");return toCents(cleaned)}
