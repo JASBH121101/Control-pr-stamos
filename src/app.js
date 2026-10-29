@@ -40,6 +40,22 @@ async function ensureProfile() {
  if (userRole !== "owner") throw new Error("Esta cuenta no tiene acceso al panel propietario. Abre el enlace de configuración o inicia sesión con la cuenta propietaria.");
  return data;
 }
+function friendlyAuthError(error){
+ const code=String(error?.code||error?.error_code||"").toLowerCase();
+ const message=String(error?.message||"");
+ const lower=message.toLowerCase();
+ if(code==="email_not_confirmed"||lower.includes("email not confirmed")||lower.includes("email_not_confirmed")){
+  return "Tu correo todavía no está confirmado. El enlace anterior venció o apuntaba a localhost; el acceso se rechaza hasta confirmar el correo con un enlace válido.";
+ }
+ if(code==="over_email_send_rate_limit"||lower.includes("email rate limit exceeded")||Number(error?.status)===429){
+  return "Supabase limitó temporalmente el envío de correos por demasiados intentos (HTTP 429). No sigas creando cuentas ni solicitando enlaces por ahora. Espera a que se restablezca el límite; si persiste, habrá que configurar SMTP propio en Supabase.";
+ }
+ if(lower.includes("invalid login credentials"))return "El correo o la contraseña no coinciden.";
+ if(lower.includes("para crear la cuenta propietaria"))return message;
+ if(lower.includes("email address")&&lower.includes("invalid"))return "El formato del correo electrónico no es válido.";
+ if(lower.includes("password")&&lower.includes("least"))return "La contraseña no cumple los requisitos mínimos.";
+ return message||"No se pudo completar la operación de acceso.";
+}
 async function authSubmit(e) {
  e.preventDefault();
  const err = $("#auth-error"); err.hidden = true;
@@ -68,7 +84,7 @@ async function authSubmit(e) {
   showAuth(false); setMode("owner"); await loadData(); await loadOperatorDevices();
   setConnection("Conectado y sincronizado", true);
  } catch (ex) {
-  err.textContent = ex.message || "No se pudo iniciar sesión."; err.hidden = false;
+  err.textContent = friendlyAuthError(ex); err.hidden = false;
   if (user) { await supabase.auth.signOut(); user = null; userRole = null; showAuth(true); }
  } finally { $("#auth-submit").disabled = false; }
 }
@@ -151,9 +167,14 @@ async function start(){
   }
  }catch(ex){setConnection("Acceso no disponible: "+ex.message);$("#auth-error").textContent=ex.message;$("#auth-error").hidden=false;}
 }
-function setFontZoom(value){const scale=Math.max(.9,Math.min(1.3,Math.round(value*100)/100));document.documentElement.style.zoom=String(scale);localStorage.setItem("control-prestamos-font-zoom",String(scale));$("#font-smaller").disabled=scale<=.9;$("#font-larger").disabled=scale>=1.3;$("#font-reset").disabled=scale===1}
+function setFontZoom(value){
+ let desired=Number(value);if(!Number.isFinite(desired))desired=1;
+ const scale=Math.max(.9,Math.min(1.3,Math.round(desired*10)/10));
+ document.documentElement.style.zoom=String(scale);
+ localStorage.setItem("control-prestamos-font-zoom",String(scale));
+ $("#font-size-level").value=String(Math.round(scale*100));
+ $("#font-size-value").textContent=String(Math.round(scale*100))+"%";
+}
 setFontZoom(Number(localStorage.getItem("control-prestamos-font-zoom")||1));
-$("#font-smaller").addEventListener("click",()=>setFontZoom(Number(document.documentElement.style.zoom||1)-.1));
-$("#font-reset").addEventListener("click",()=>setFontZoom(1));
-$("#font-larger").addEventListener("click",()=>setFontZoom(Number(document.documentElement.style.zoom||1)+.1));
+$("#font-size-level").addEventListener("input",event=>setFontZoom(Number(event.currentTarget.value)/100));
 start();
