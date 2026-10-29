@@ -28,6 +28,11 @@ test("owner interface exposes device pairing and revocation controls", async ({ 
   await expect(page.locator("#client-phone")).toHaveCount(1);
   await expect(page.locator("#loan-date")).toHaveAttribute("type", "date");
   await expect(page.locator("#payment-date")).toHaveAttribute("type", "date");
+  await expect(page.locator("#entry-panel")).toBeHidden();
+  for (const id of ["#client-name", "#client-phone", "#amount", "#entry-note"]) {
+    await expect(page.locator(id)).toHaveJSProperty("placeholder", "");
+  }
+  await expect(page.locator("#terms-preview")).toBeHidden();
 });
 
 test("operator forms include the loan date, payment date and optional phone", async ({ page }) => {
@@ -36,12 +41,17 @@ test("operator forms include the loan date, payment date and optional phone", as
   await expect(page.locator("#loan-date")).toHaveAttribute("type", "date");
   await expect(page.locator("#payment-date")).toHaveAttribute("type", "date");
   await expect(page.locator("#terms-preview")).toBeAttached();
+  await expect(page.locator("#entry-panel")).toBeHidden();
+  for (const id of ["#client-name", "#client-phone", "#amount", "#entry-note"]) {
+    await expect(page.locator(id)).toHaveJSProperty("placeholder", "");
+  }
+  await expect(page.locator("#terms-preview")).toBeHidden();
 });
 
 test("operator money is a currency-formatted text field", async ({ page }) => {
   await page.goto("/operador.html");
   await expect(page.locator("#amount")).toHaveAttribute("type", "text");
-  await expect(page.locator("#amount")).toHaveAttribute("placeholder", "C$ 0.00");
+  await expect(page.locator("#amount")).toHaveJSProperty("placeholder", "");
   await expect(page.locator("#amount")).toHaveAttribute("autocomplete", "off");
 });
 
