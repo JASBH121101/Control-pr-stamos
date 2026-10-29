@@ -8,7 +8,7 @@ test("operator interface has no email/password fields and offers a PIN gate", as
   await expect(page.locator("#auth-password")).toHaveCount(0);
   await expect(page.locator("#pair-setup-form")).toHaveCount(1);
   await expect(page.locator("#pin-unlock-form")).toHaveCount(1);
-  await expect(page.getByRole("button", { name: /A\+ Aumentar tamaño de texto/ })).toBeVisible();
+  await expect(page.getByRole("slider", { name: "Nivel de tamaño del texto" })).toBeVisible();
   await expect(page.locator("#lock-operator")).toBeAttached();
 });
 
