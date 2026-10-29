@@ -10,7 +10,7 @@ test("loads the simple mode and its key actions", async ({ page }) => {
   await expect(page.getByRole("heading", { name: "¿Qué vamos a hacer hoy?" })).toBeVisible();
   await expect(page.getByRole("button", { name: /Registrar préstamo/ })).toBeVisible();
   await expect(page.getByRole("button", { name: /Registrar abono/ })).toBeVisible();
-  await expect(page.getByText("María López")).toBeVisible();
+  await expect(page.locator(".record-main h3", { hasText: "María López" })).toBeVisible();
 });
 
 test("switches to owner mode and shows financial totals", async ({ page }) => {
@@ -26,7 +26,7 @@ test("registers a loan and updates the list", async ({ page }) => {
   await page.getByLabel("Nombre del cliente").fill("Prueba de cliente");
   await page.getByLabel("Monto en córdobas").fill("300");
   await page.getByRole("button", { name: "Guardar registro" }).click();
-  await expect(page.getByText("Prueba de cliente")).toBeVisible();
+  await expect(page.locator(".record-main h3", { hasText: "Prueba de cliente" })).toBeVisible();
   await expect(page.getByRole("status")).toContainText("Préstamo registrado");
 });
 
@@ -39,6 +39,6 @@ test("rejects a payment above the outstanding balance", async ({ page }) => {
 
 test("search filters pending loans by client", async ({ page }) => {
   await page.getByRole("searchbox", { name: "Buscar cliente" }).fill("Carlos");
-  await expect(page.getByText("Carlos Ruiz")).toBeVisible();
-  await expect(page.getByText("María López")).toHaveCount(0);
+  await expect(page.locator(".record-main h3", { hasText: "Carlos Ruiz" })).toBeVisible();
+  await expect(page.locator(".record-main h3", { hasText: "María López" })).toHaveCount(0);
 });
