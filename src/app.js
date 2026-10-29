@@ -52,7 +52,8 @@ async function authSubmit(e) {
    user = data.user;
   } else {
    if (!localStorage.getItem(OWNER_CLAIM_KEY)) throw new Error("Para crear la cuenta propietaria, abre primero el enlace seguro de configuración.");
-   const { data, error } = await supabase.auth.signUp({ email, password, options: { data: { display_name: $("#auth-name").value.trim() || email.split("@")[0] } } });
+   const emailRedirectTo = new URL("./", location.href).href;
+    const { data, error } = await supabase.auth.signUp({ email, password, options: { emailRedirectTo, data: { display_name: $("#auth-name").value.trim() || email.split("@")[0] } } });
    if (error) throw error;
    if (!data.session) {
     setAuthMode("login");
