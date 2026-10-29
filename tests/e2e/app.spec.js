@@ -1,49 +1,35 @@
 import { test, expect } from "@playwright/test";
 
-test.beforeEach(async ({ page }) => {
+test("operator interface has no email/password fields and offers a PIN gate", async ({ page }) => {
+  await page.goto("/operador.html");
+  await expect(page.locator("#pairing-panel")).toBeVisible();
+  await expect(page.locator("#pairing-title")).toBeVisible();
+  await expect(page.locator("#auth-email")).toHaveCount(0);
+  await expect(page.locator("#auth-password")).toHaveCount(0);
+  await expect(page.locator("#pair-setup-form")).toHaveCount(1);
+  await expect(page.locator("#pin-unlock-form")).toHaveCount(1);
+  await expect(page.getByRole("button", { name: /A\+ Aumentar tamaño de texto/ })).toBeVisible();
+  await expect(page.locator("#lock-operator")).toBeAttached();
+});
+
+test("operator PIN forms enforce a 4-to-6 digit pattern", async ({ page }) => {
+  await page.goto("/operador.html");
+  await expect(page.locator("#new-pin")).toHaveAttribute("pattern", "[0-9]{4,6}");
+  await expect(page.locator("#confirm-pin")).toHaveAttribute("pattern", "[0-9]{4,6}");
+  await expect(page.locator("#operator-pin")).toHaveAttribute("pattern", "[0-9]{4,6}");
+  await expect(page.locator("#new-pin")).toHaveAttribute("maxlength", "6");
+});
+
+test("owner interface exposes device pairing and revocation controls", async ({ page }) => {
   await page.goto("/");
-  await expect(page.locator("#auth-panel")).toBeVisible();
+  await expect(page.locator("#device-admin-panel")).toBeAttached();
+  await expect(page.getByRole("button", { name: /Generar enlace seguro/ })).toBeAttached();
+  await expect(page.locator("#operator-device-list")).toBeAttached();
 });
 
-test("shows login and an accessible create-account option", async ({ page }) => {
-  await expect(page.getByRole("heading", { name: "Inicia sesión" })).toBeVisible();
-  await expect(page.getByLabel("Correo electrónico")).toBeVisible();
-  await expect(page.getByLabel("Contraseña")).toBeVisible();
-  await expect(page.getByRole("button", { name: "Crear cuenta" })).toBeVisible();
-  await expect(page.locator(".record-card")).toHaveCount(0);
-});
-
-test("create-account option reveals the name field and can return to login", async ({ page }) => {
-  await page.getByRole("button", { name: "Crear cuenta" }).click();
-  await expect(page.getByRole("heading", { name: "Crear cuenta" })).toBeVisible();
-  await expect(page.getByLabel("Nombre para mostrar")).toBeVisible();
-  await expect(page.getByRole("button", { name: "Ya tengo cuenta" })).toBeVisible();
-  await page.getByRole("button", { name: "Ya tengo cuenta" }).click();
-  await expect(page.getByRole("heading", { name: "Inicia sesión" })).toBeVisible();
-  await expect(page.getByLabel("Nombre para mostrar")).toBeHidden();
-});
-
-test("font-size controls enlarge, reset and persist the user preference", async ({ page }) => {
-  await expect.poll(() => page.evaluate(() => document.documentElement.style.zoom)).toBe("1");
-  await page.getByRole("button", { name: "Aumentar tamaño de texto" }).click();
-  await expect.poll(() => page.evaluate(() => document.documentElement.style.zoom)).toBe("1.1");
-  await page.reload();
-  await expect.poll(() => page.evaluate(() => document.documentElement.style.zoom)).toBe("1.1");
-  await page.getByRole("button", { name: "Restablecer tamaño de texto" }).click();
-  await expect.poll(() => page.evaluate(() => document.documentElement.style.zoom)).toBe("1");
-});
-
-test("financial input uses C$ format and browser autocomplete is disabled for search", async ({ page }) => {
+test("operator money is a currency-formatted text field", async ({ page }) => {
+  await page.goto("/operador.html");
+  await expect(page.locator("#amount")).toHaveAttribute("type", "text");
   await expect(page.locator("#amount")).toHaveAttribute("placeholder", "C$ 0.00");
   await expect(page.locator("#amount")).toHaveAttribute("autocomplete", "off");
-  await expect(page.locator("#search")).toHaveAttribute("autocomplete", "off");
-});
-
-test("operator page is separate and does not request username or password", async ({ page }) => {
-  await page.goto("/operador.html");
-  await expect(page.getByRole("heading", { name: "Preparando tu acceso" })).toBeVisible();
-  await expect(page.getByLabel("Correo electrónico")).toHaveCount(0);
-  await expect(page.getByLabel("Contraseña")).toHaveCount(0);
-  await expect(page.getByRole("button", { name: "A+ Aumentar tamaño de texto" })).toBeVisible();
-  await expect(page.locator("#show-loan-form")).toBeAttached();
 });

@@ -112,7 +112,7 @@ async function loadOperatorDevices(){
  const {data,error}=await supabase.from("operator_devices").select("id,device_name,is_active,paired_at,last_seen_at").eq("owner_id",user.id).order("paired_at",{ascending:false});
  if(error){list.innerHTML='<p class="empty-state">No se pudieron cargar los dispositivos.</p>';return;}
  if(!data?.length){list.innerHTML='<p class="empty-state">Todavía no hay dispositivos vinculados.</p>';return;}
- list.innerHTML=data.map(d=>`<div class="device-row"><div><strong>${esc(d.device_name)}</strong><small>Vinculado: ${formatDate(d.paired_at)}</small><small>${d.last_seen_at?"Última actividad: "+formatDate(d.last_seen_at):"Sin actividad reciente"}</small></div><span class="device-status ${d.is_active?"":"revoked"}">${d.is_active?"ACTIVO":"REVOCADO"}</span>${d.is_active?`<button class="device-revoke" data-revoke-device="${d.id}" type="button">Revocar</button>`:""}</div>`).join("");
+ list.innerHTML=data.map(d=>`<div class="device-row"><div><strong>${esc(d.device_name)}</strong><small>Vinculado: ${date(d.paired_at)}</small><small>${d.last_seen_at?"Última actividad: "+date(d.last_seen_at):"Sin actividad reciente"}</small></div><span class="device-status ${d.is_active?"":"revoked"}">${d.is_active?"ACTIVO":"REVOCADO"}</span>${d.is_active?`<button class="device-revoke" data-revoke-device="${d.id}" type="button">Revocar</button>`:""}</div>`).join("");
 }
 $("#create-operator-invite").addEventListener("click",createOperatorInvite);
 $("#copy-operator-invite").addEventListener("click",async()=>{try{await navigator.clipboard.writeText($("#operator-invite-url").value);toast("Enlace copiado.")}catch{ $("#operator-invite-url").focus();$("#operator-invite-url").select();toast("Copia el enlace seleccionado.")}});
