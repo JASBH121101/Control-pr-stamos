@@ -73,8 +73,14 @@ test("operator can create loans and payments offline and queue them durably", as
   await page.locator("#unlock-submit").click();
   await expect(page.locator(".welcome")).toBeVisible();
   await expect(page.locator("#record-list")).toContainText("Cliente de prueba");
+  const localDate = await page.evaluate(() => {
+    const parts = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Managua", year: "numeric", month: "2-digit", day: "2-digit" }).formatToParts(new Date());
+    const byType = Object.fromEntries(parts.map(part => [part.type, part.value]));
+    return `${byType.year}-${byType.month}-${byType.day}`;
+  });
 
   await page.locator("[data-pay]").first().click();
+  await page.locator("#payment-date").fill(localDate);
   await page.locator("#amount").fill("5.00");
   await page.locator("#entry-note").fill("Abono sin conexión");
   await page.locator("#entry-form button[type=submit]").click();
@@ -82,6 +88,7 @@ test("operator can create loans and payments offline and queue them durably", as
 
   await page.locator("#show-loan-form").click();
   await page.locator("#client-name").fill("Nuevo Cliente Offline");
+  await page.locator("#loan-date").fill(localDate);
   await page.locator("#amount").fill("100.00");
   await page.locator("#months").fill("2");
   await page.locator("#entry-note").fill("Préstamo sin conexión");
