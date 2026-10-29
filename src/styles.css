@@ -76,3 +76,5 @@ input[type="date"].date-empty::-webkit-calendar-picker-indicator{opacity:1;curso
 input[type="date"].date-empty{color:transparent}
 input[type="date"].date-empty::-webkit-datetime-edit{color:transparent}
 input[type="date"].date-empty::-webkit-calendar-picker-indicator{opacity:1;cursor:pointer}
+
+.biometric-settings{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-top:14px}.biometric-settings .field-hint{flex-basis:100%;margin:2px 0 0}.biometric-settings button{min-height:42px}
