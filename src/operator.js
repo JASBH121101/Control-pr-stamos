@@ -1,5 +1,5 @@
 import { calculateLoanTerms, calculateMonthlyReferenceCents, formatCordobas, toCents } from "./domain/loans.js";
-import { hasVault, createVault, unlockVault, saveVault, getVault, lockVault } from "./offline-store.js";
+import { hasVault, createVault, unlockVault, saveVault, getVault, lockVault, getBiometricInfo, enableBiometricUnlock, unlockVaultWithBiometric, disableBiometricUnlock } from "./offline-store.js";
 const SUPABASE_URL = "https://ctdcqwffzhpzgevqahob.supabase.co";
 const SUPABASE_KEY = "sb_publishable_OV4MxEx5M-nRNQWnaOVXcA_B7YW8z73";
 let supabase = null;
@@ -13,6 +13,203 @@ async function getSupabase() {
 }
 function isNetworkError(error) {
   return !navigator.onLine || /failed to fetch|fetch failed|network|load failed|sin conexión|connection/i.test(String(error?.message || ""));
+}
+
+const BIOMETRIC_ENDPOINT = SUPABASE_URL + "/functions/v1/operator-biometric";
+function base64urlToBytes(value) {
+  const normalized = String(value).replace(/-/g, "+").replace(/_/g, "/");
+  const binary = atob(normalized + "=".repeat((4 - normalized.length % 4) % 4));
+  return Uint8Array.from(binary, char => char.charCodeAt(0));
+}
+function bufferToBase64url(value) {
+  const bytes = new Uint8Array(value);
+  let binary = "";
+  for (const byte of bytes) binary += String.fromCharCode(byte);
+  return btoa(binary).replace(/\\+/g, "-").replace(/\\//g, "_").replace(/=+$/g, "");
+}
+function extensionBytes(value) {
+  if (value instanceof ArrayBuffer) return new Uint8Array(value);
+  if (ArrayBuffer.isView(value)) return new Uint8Array(value.buffer, value.byteOffset, value.byteLength);
+  return null;
+}
+function getPrfOutput(credential) {
+  const output = credential?.getClientExtensionResults?.()?.prf?.results?.first;
+  const bytes = extensionBytes(output);
+  if (!bytes || bytes.length < 32) throw new Error("Este celular o navegador no ofrece la extensión biométrica segura necesaria. Puedes seguir usando el PIN.");
+  return bytes;
+}
+async function biometricApi(action, extra = {}) {
+  if (!navigator.onLine) throw new Error("Conéctate a Internet para verificar la huella con el servidor.");
+  const sb = await getSupabase();
+  const { data, error } = await sb.auth.getSession();
+  if (error) throw error;
+  const token = data?.session?.access_token;
+  if (!token) throw new Error("La sesión del dispositivo expiró. Entra con el PIN cuando tengas conexión.");
+  const response = await fetch(BIOMETRIC_ENDPOINT, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "Authorization": "Bearer " + token, "apikey": SUPABASE_KEY },
+    body: JSON.stringify({ action, ...extra })
+  });
+  let result = {};
+  try { result = await response.json(); } catch {}
+  if (!response.ok || result.error) throw new Error(result.error || "No se pudo verificar la autenticación biométrica.");
+  return result;
+}
+function serializeRegistrationCredential(credential) {
+  const response = credential.response;
+  return {
+    id: credential.id, rawId: bufferToBase64url(credential.rawId), type: credential.type,
+    response: {
+      attestationObject: bufferToBase64url(response.attestationObject),
+      clientDataJSON: bufferToBase64url(response.clientDataJSON),
+      transports: typeof response.getTransports === "function" ? response.getTransports() : ["internal"]
+    }
+  };
+}
+function serializeAuthenticationCredential(credential) {
+  const response = credential.response;
+  return {
+    id: credential.id, rawId: bufferToBase64url(credential.rawId), type: credential.type,
+    response: {
+      authenticatorData: bufferToBase64url(response.authenticatorData),
+      clientDataJSON: bufferToBase64url(response.clientDataJSON),
+      signature: bufferToBase64url(response.signature),
+      userHandle: response.userHandle ? bufferToBase64url(response.userHandle) : null
+    },
+    clientExtensionResults: {}
+  };
+}
+async function getBiometricAssertion(options, rpId, prfSalt) {
+  const publicKey = {
+    ...options,
+    challenge: base64urlToBytes(options.challenge),
+    rpId,
+    allowCredentials: (options.allowCredentials || []).map(item => ({ ...item, id: base64urlToBytes(item.id) })),
+    userVerification: "required",
+    extensions: { ...(options.extensions || {}), prf: { eval: { first: prfSalt } } }
+  };
+  const credential = await navigator.credentials.get({ publicKey });
+  if (!credential) throw new Error("No se completó la verificación biométrica.");
+  return { credential, prfOutput: getPrfOutput(credential) };
+}
+async function refreshBiometricControls() {
+  const unlockButton = $("#biometric-unlock"), unlockHint = $("#biometric-unlock-hint");
+  const pinButton = $("#unlock-submit"), enableButton = $("#enable-biometric"), disableButton = $("#disable-biometric");
+  const info = await getBiometricInfo().catch(() => null);
+  const supported = Boolean(window.isSecureContext && navigator.credentials && window.PublicKeyCredential);
+  if (unlockButton) unlockButton.hidden = !info || !supported;
+  if (unlockHint) unlockHint.hidden = !info || !supported;
+  if (pinButton) {
+    pinButton.textContent = info && supported ? "Usar PIN como alternativa" : "Desbloquear con PIN";
+    pinButton.classList.toggle("primary-button", !info || !supported);
+    pinButton.classList.toggle("secondary-button", Boolean(info && supported));
+  }
+  if (enableButton) enableButton.hidden = !isUnlocked || !navigator.onLine || Boolean(info) || !supported;
+  if (disableButton) disableButton.hidden = !isUnlocked || !navigator.onLine || !info;
+  const statusEl = $("#biometric-status");
+  if (statusEl) {
+    statusEl.hidden = !(isUnlocked && info && !navigator.onLine);
+    statusEl.textContent = "Huella configurada. Sin conexión puedes abrir la copia local; para sincronizar necesitarás recuperar Internet.";
+  }
+}
+async function handleBiometricUnlock() {
+  const button = $("#biometric-unlock"), error = $("#unlock-error");
+  button.disabled = true; error.hidden = true;
+  let serverAuthorized = false;
+  try {
+    if (!window.isSecureContext || !navigator.credentials || !window.PublicKeyCredential) throw new Error("Este navegador no admite autenticación biométrica segura.");
+    const info = await getBiometricInfo();
+    if (!info) throw new Error("Primero debes activar la huella desde la configuración del operador.");
+    let prfOutput;
+    if (navigator.onLine) {
+      const result = await biometricApi("authentication-options");
+      const assertion = await getBiometricAssertion(result.options, info.rpId, base64urlToBytes(info.prfSalt));
+      await biometricApi("authentication-verify", { credential: serializeAuthenticationCredential(assertion.credential) });
+      serverAuthorized = true;
+      prfOutput = assertion.prfOutput;
+    } else {
+      const challenge = crypto.getRandomValues(new Uint8Array(32));
+      const assertion = await navigator.credentials.get({ publicKey: {
+        challenge, rpId: info.rpId, timeout: 60000, userVerification: "required",
+        allowCredentials: [{ type: "public-key", id: base64urlToBytes(info.credentialId) }],
+        extensions: { prf: { eval: { first: base64urlToBytes(info.prfSalt) } } }
+      } });
+      if (!assertion) throw new Error("No se completó la verificación biométrica.");
+      prfOutput = getPrfOutput(assertion);
+    }
+    const vault = await unlockVaultWithBiometric(prfOutput);
+    if (navigator.onLine) {
+      if (!user?.id || vault.userId !== user.id || (ownerId && vault.ownerId !== ownerId)) throw new Error("La copia local no corresponde al dispositivo vinculado.");
+      ownerId = vault.ownerId;
+      offlineMode = false;
+    } else {
+      user = { id: vault.userId, is_anonymous: true }; ownerId = vault.ownerId; offlineMode = true;
+    }
+    customers = vault.customers || []; loans = vault.loans || [];
+    isUnlocked = true; lastTouch = Date.now(); render();
+    if (navigator.onLine) {
+      try {
+        await syncPending(); await loadData(); showApp(true); status("Huella verificada. Dispositivo desbloqueado y sincronizado.", true);
+      } catch {
+        offlineMode = true; await loadLocalData(); showApp(true); status("Huella verificada. Los registros locales se conservaron; la sincronización queda pendiente.");
+      }
+    } else {
+      showApp(true); status("Huella verificada. Modo sin conexión: los cambios se guardan cifrados en este dispositivo.");
+    }
+    armIdleLock(); await refreshBiometricControls();
+  } catch (ex) {
+    if (serverAuthorized) { try { const sb = await getSupabase(); await sb.rpc("lock_operator_session"); } catch {} lockVault(); }
+    error.textContent = ex.message || "No se pudo desbloquear con la huella."; error.hidden = false;
+  } finally { button.disabled = false; }
+}
+async function handleBiometricSetup() {
+  const button = $("#enable-biometric"), statusEl = $("#biometric-status");
+  button.disabled = true; statusEl.hidden = false; statusEl.textContent = "Preparando autenticación segura…";
+  let credentialRegistered = false;
+  try {
+    if (!isUnlocked || !navigator.onLine) throw new Error("Desbloquea la aplicación con el PIN y conéctate a Internet para activar la huella.");
+    if (!window.isSecureContext || !navigator.credentials || !window.PublicKeyCredential) throw new Error("Este navegador no ofrece WebAuthn en un contexto seguro.");
+    const response = await biometricApi("registration-options");
+    const options = response.options;
+    const publicKey = {
+      ...options,
+      challenge: base64urlToBytes(options.challenge),
+      user: { ...options.user, id: base64urlToBytes(options.user.id) },
+      excludeCredentials: (options.excludeCredentials || []).map(item => ({ ...item, id: base64urlToBytes(item.id) })),
+      extensions: { ...(options.extensions || {}), prf: {} }
+    };
+    const created = await navigator.credentials.create({ publicKey });
+    if (!created) throw new Error("No se completó el registro de la huella.");
+    await biometricApi("registration-verify", { credential: serializeRegistrationCredential(created) });
+    credentialRegistered = true;
+    statusEl.textContent = "Huella registrada. Comprobando el cifrado biométrico…";
+    const salt = crypto.getRandomValues(new Uint8Array(32));
+    const authOptions = await biometricApi("authentication-options");
+    const assertion = await getBiometricAssertion(authOptions.options, location.hostname, salt);
+    await biometricApi("authentication-verify", { credential: serializeAuthenticationCredential(assertion.credential) });
+    await enableBiometricUnlock({ credentialId: created.id, rpId: location.hostname, prfSalt: salt, prfOutput: assertion.prfOutput });
+    credentialRegistered = false;
+    statusEl.textContent = "Huella activada. La próxima vez podrás desbloquear con biometría o usar el PIN como respaldo.";
+    statusEl.hidden = false; status("Autenticación biométrica activada correctamente.", true);
+    await refreshBiometricControls();
+  } catch (ex) {
+    if (credentialRegistered) { try { await biometricApi("remove"); } catch {} }
+    statusEl.textContent = ex.message || "No se pudo activar la huella. El PIN sigue funcionando.";
+    statusEl.hidden = false;
+  } finally { button.disabled = false; }
+}
+async function handleBiometricRemoval() {
+  const button = $("#disable-biometric"), statusEl = $("#biometric-status");
+  button.disabled = true;
+  try {
+    await biometricApi("remove");
+    await disableBiometricUnlock();
+    statusEl.textContent = "Huella desactivada. El PIN sigue protegiendo la copia local.";
+    statusEl.hidden = false; status("Autenticación biométrica desactivada.", true);
+    await refreshBiometricControls();
+  } catch (ex) {
+    statusEl.textContent = ex.message || "No se pudo desactivar la huella."; statusEl.hidden = false;
+  } finally { button.disabled = false; }
 }
 const $ = s => document.querySelector(s);
 const money = cents => formatCordobas(Number(cents || 0));
