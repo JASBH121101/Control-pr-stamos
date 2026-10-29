@@ -158,7 +158,16 @@ function openForm(type,loan=null){
 }
 function closeForm(){$("#entry-panel").hidden=true;$("#client-name").readOnly=false;selectedLoanId=null}
 function parseMoney(raw){const cleaned=String(raw).replace(/C\$/gi,"").replace(/\s/g,"").replace(/,/g,"");if(!/^\d+(\.\d{0,2})?$/.test(cleaned))throw new Error("Escribe un monto válido, por ejemplo C$ 1,250.00.");return toCents(cleaned)}
-function updatePreview(){if($("#terms-preview").hidden)return;try{const cents=parseMoney($("#amount").value),months=Number($("#months").value);if(!cents||!Number.isInteger(months)||months<1||months>120){$("#terms-preview").textContent="Interés simple fijo: 15% mensual.";return}const interest=Math.round(cents*.15*months);$("#terms-preview").textContent=`Interés: ${money(interest)} · Total a devolver: ${money(cents+interest)}`}catch{$("#terms-preview").textContent="Interés simple fijo: 15% mensual."}}
+function updatePreview(){
+ if($("#terms-preview").hidden)return;
+ try{
+  const cents=parseMoney($("#amount").value),months=Number($("#months").value);
+  if(!cents||!Number.isInteger(months)||months<1||months>120){$("#terms-preview").textContent="Interés simple fijo: 15% mensual. Introduce monto y plazo para estimar la cuota.";return}
+  const terms=calculateLoanTerms(cents,months);
+  const installment=calculateMonthlyReferenceCents(terms.totalDueCents,months);
+  $("#terms-preview").textContent="Interés total: "+money(terms.interestCents)+" · Total a devolver: "+money(terms.totalDueCents)+" · Cuota mensual de referencia: "+money(installment)+". Los abonos pueden ser parciales.";
+ }catch{$("#terms-preview").textContent="Interés simple fijo: 15% mensual."}
+}
 $("#amount").addEventListener("focus",()=>{if(!$("#amount").value)$("#amount").placeholder="C$ 0.00"});
 $("#amount").addEventListener("blur",()=>{try{if($("#amount").value)$("#amount").value=money(parseMoney($("#amount").value))}catch{}});
 $("#amount").addEventListener("input",updatePreview);$("#months").addEventListener("input",updatePreview);
