@@ -1,4 +1,4 @@
-import { formatCordobas, toCents } from "./domain/loans.js";
+import { calculateLoanTerms, calculateMonthlyReferenceCents, formatCordobas, toCents } from "./domain/loans.js";
 import { hasVault, createVault, unlockVault, saveVault, getVault, lockVault } from "./offline-store.js";
 const SUPABASE_URL = "https://ctdcqwffzhpzgevqahob.supabase.co";
 const SUPABASE_KEY = "sb_publishable_OV4MxEx5M-nRNQWnaOVXcA_B7YW8z73";
@@ -18,6 +18,23 @@ const $ = s => document.querySelector(s);
 const money = cents => formatCordobas(Number(cents || 0));
 const esc = value => String(value ?? "").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 const date = value => new Intl.DateTimeFormat("es-NI",{dateStyle:"medium",timeStyle:"short",timeZone:"America/Managua"}).format(new Date(value));
+function todayLocalDate(){
+ const parts=new Intl.DateTimeFormat("en-CA",{timeZone:"America/Managua",year:"numeric",month:"2-digit",day:"2-digit"}).formatToParts(new Date());
+ const part=Object.fromEntries(parts.map(p=>[p.type,p.value]));
+ return part.year+"-"+part.month+"-"+part.day;
+}
+function dateInputTimestamp(value){
+ if(!/^\d{4}-\d{2}-\d{2}$/.test(String(value||"")))throw new Error("Selecciona una fecha válida.");
+ const parsed=new Date(value+"T12:00:00-06:00");
+ if(Number.isNaN(parsed.getTime()))throw new Error("La fecha indicada no es válida.");
+ return parsed.toISOString();
+}
+function displayDay(value){
+ if(!value)return "—";
+ const raw=String(value);
+ const normalized=/^\d{4}-\d{2}-\d{2}$/.test(raw)?raw+"T12:00:00-06:00":raw;
+ return new Intl.DateTimeFormat("es-NI",{dateStyle:"medium",timeZone:"America/Managua"}).format(new Date(normalized));
+}
 const PAIR_KEY="control-prestamos-pending-operator-pair";
 let user=null,ownerId=null,loans=[],customers=[],entryType="loan",selectedLoanId=null,isUnlocked=false,offlineMode=false,idleTimer=null,lastTouch=0;
 const query=new URLSearchParams(location.search);
@@ -29,12 +46,55 @@ function toast(message){const el=$("#toast");el.textContent=message;el.hidden=fa
 async function sha256Hex(value){const digest=await crypto.subtle.digest("SHA-256",new TextEncoder().encode(value));return Array.from(new Uint8Array(digest),b=>b.toString(16).padStart(2,"0")).join("")}
 function balance(loan){return Math.max(0,Number(loan.total_due_cents)-Number(loan.paid_cents||0))}
 function parseMoney(raw){const cleaned=String(raw).replace(/C\$/gi,"").replace(/\s/g,"").replace(/,/g,"");if(!/^\d+(\.\d{0,2})?$/.test(cleaned))throw new Error("Escribe un monto válido, por ejemplo C$ 1,250.00.");return toCents(cleaned)}
-function updatePreview(){if($("#terms-preview").hidden)return;try{const cents=parseMoney($("#amount").value),months=Number($("#months").value);if(!cents||!Number.isInteger(months)||months<1||months>120){$("#terms-preview").textContent="Interés simple fijo: 15% mensual.";return}const interest=Math.round(cents*.15*months);$("#terms-preview").textContent=`Interés: ${money(interest)} · Total a devolver: ${money(cents+interest)}`}catch{$("#terms-preview").textContent="Interés simple fijo: 15% mensual."}}
-function render(){const active=loans.filter(l=>balance(l)>0);$("#outstanding-total").textContent=money(loans.reduce((s,l)=>s+balance(l),0));$("#active-count").textContent=String(active.length);const q=$("#search").value.trim().toLocaleLowerCase("es");const rows=loans.filter(l=>(l.customers?.full_name||"").toLocaleLowerCase("es").includes(q));$("#empty-state").hidden=rows.length>0;$("#empty-state").textContent=q?"No hay resultados para esa búsqueda.":"No hay préstamos registrados. Usa «Registrar préstamo» para comenzar.";$("#record-list").innerHTML=rows.map(l=>{const name=l.customers?.full_name||"Cliente";return `<article class="record-card"><div class="record-avatar" aria-hidden="true">${esc(name.slice(0,1).toUpperCase())}</div><div class="record-main"><h3>${esc(name)}</h3><small>${Number(l.term_months)} mes(es) · ${date(l.created_at)}</small><div class="detail-extra" id="detail-${l.id}" hidden><p>Capital: ${money(l.principal_cents)}</p><p>Interés: ${money(l.interest_cents)}</p><p>Total acordado: ${money(l.total_due_cents)}</p><p>Abonado: ${money(l.paid_cents)}</p>${l.note?`<p>Nota: ${esc(l.note)}</p>`:""}</div></div><div class="record-balance"><span>Saldo pendiente</span><strong>${money(balance(l))}</strong><div class="record-actions"><button class="small-pay-button" data-pay="${l.id}" type="button" ${balance(l)<=0?"disabled":""} aria-label="Registrar abono">＋ Abono</button><button class="small-icon-button" data-view="${l.id}" type="button" aria-label="Ver detalle" title="Ver detalle">◉</button><select class="record-menu" data-menu="${l.id}" aria-label="Más opciones"><option value="">Opciones</option><option value="repeat">Prestar de nuevo</option><option value="payments">Ver abonos</option></select></div></div></article>`}).join("")}
+function updatePreview(){
+ if($("#terms-preview").hidden)return;
+ try{
+  const cents=parseMoney($("#amount").value),months=Number($("#months").value);
+  if(!cents||!Number.isInteger(months)||months<1||months>120){$("#terms-preview").textContent="Interés simple fijo: 15% mensual.";return}
+  const terms=calculateLoanTerms(cents,months);
+  const installment=calculateMonthlyReferenceCents(terms.totalDueCents,months);
+  $("#terms-preview").textContent="Interés total: "+money(terms.interestCents)+" · Total a devolver: "+money(terms.totalDueCents)+" · Cuota mensual de referencia: "+money(installment);
+ }catch{$("#terms-preview").textContent="Interés simple fijo: 15% mensual."}
+}
+function render(){
+ const active=loans.filter(l=>balance(l)>0);
+ $("#outstanding-total").textContent=money(loans.reduce((s,l)=>s+balance(l),0));
+ $("#active-count").textContent=String(active.length);
+ const q=$("#search").value.trim().toLocaleLowerCase("es");
+ const rows=loans.filter(l=>(l.customers?.full_name||"").toLocaleLowerCase("es").includes(q));
+ $("#empty-state").hidden=rows.length>0;
+ $("#empty-state").textContent=q?"No hay resultados para esa búsqueda.":"No hay préstamos registrados. Usa «Registrar préstamo» para comenzar.";
+ $("#record-list").innerHTML=rows.map(l=>{
+  const name=l.customers?.full_name||"Cliente";
+  const phone=String(l.customers?.phone||"").trim();
+  const loanDate=displayDay(l.loan_date||l.created_at);
+  const installment=calculateMonthlyReferenceCents(Number(l.total_due_cents||l.principal_cents),Number(l.term_months||1));
+  const payments=[...(l.payments||[])].sort((a,b)=>new Date(b.paid_at)-new Date(a.paid_at));
+  const paymentHistory=payments.length?'<ul class="payment-history-list">'+payments.map(p=>'<li><span>'+esc(displayDay(p.paid_at))+'</span><strong>'+money(Number(p.amount_cents||0))+'</strong>'+(p.note?'<small>'+esc(p.note)+'</small>':'')+'</li>').join("")+'</ul>':'<p class="muted-copy">Todavía no hay abonos registrados.</p>';
+  return '<article class="record-card"><div class="record-avatar" aria-hidden="true">'+esc(name.slice(0,1).toUpperCase())+'</div><div class="record-main"><h3>'+esc(name)+'</h3><small>Préstamo: '+esc(loanDate)+' · '+Number(l.term_months)+' mes(es)</small><div class="detail-extra" id="detail-'+esc(l.id)+'" hidden><p>Fecha del préstamo: <strong>'+esc(loanDate)+'</strong></p>'+(phone?'<p>Teléfono: <strong>'+esc(phone)+'</strong></p>':'')+'<p>Capital: <strong>'+money(Number(l.principal_cents||0))+'</strong></p><p>Interés total (15% simple mensual): <strong>'+money(Number(l.interest_cents||0))+'</strong></p><p>Total acordado: <strong>'+money(Number(l.total_due_cents||0))+'</strong></p><p>Cuota mensual de referencia: <strong>'+money(installment)+'</strong></p><p>Total abonado: <strong>'+money(Number(l.paid_cents||0))+'</strong></p><p>Saldo pendiente: <strong>'+money(balance(l))+'</strong></p>'+(l.note?'<p>Nota: '+esc(l.note)+'</p>':'')+'<div class="payment-history"><h4>Abonos registrados ('+payments.length+')</h4>'+paymentHistory+'</div></div></div><div class="record-balance"><span>Saldo pendiente</span><strong>'+money(balance(l))+'</strong><div class="record-actions"><button class="small-pay-button" data-pay="'+esc(l.id)+'" type="button" '+(balance(l)<=0?'disabled':'')+' aria-label="Registrar abono">＋ Abono</button><button class="small-icon-button" data-view="'+esc(l.id)+'" type="button" aria-label="Ver detalle" title="Ver detalle">◉</button><select class="record-menu" data-menu="'+esc(l.id)+'" aria-label="Más opciones"><option value="">Opciones</option><option value="repeat">Prestar de nuevo</option><option value="payments">Ver abonos</option></select></div></div></article>';
+ }).join("");
+}
 async function loadLocalData(){const vault=getVault();ownerId=vault.ownerId;customers=vault.customers||[];loans=vault.loans||[];render();return vault}
-async function loadData(){const sb=await getSupabase();const [loanResult,customerResult]=await Promise.all([sb.from("loans").select("*, customers(full_name), payments(id,amount_cents,paid_at,note)").eq("owner_id",ownerId).order("created_at",{ascending:false}),sb.from("customers").select("id,owner_id,full_name,created_at,updated_at").eq("owner_id",ownerId).order("created_at",{ascending:false})]);if(loanResult.error)throw loanResult.error;if(customerResult.error)throw customerResult.error;loans=(loanResult.data||[]).map(l=>({...l,paid_cents:(l.payments||[]).reduce((s,p)=>s+Number(p.amount_cents),0)}));customers=customerResult.data||[];const vault=getVault();await saveVault({...vault,customers,loans,lastSyncAt:new Date().toISOString()});render()}
+async function loadData(){const sb=await getSupabase();const [loanResult,customerResult]=await Promise.all([sb.from("loans").select("*, customers(full_name,phone), payments(id,amount_cents,paid_at,note)").eq("owner_id",ownerId).order("created_at",{ascending:false}),sb.from("customers").select("id,owner_id,full_name,phone,notes,created_at,updated_at").eq("owner_id",ownerId).order("created_at",{ascending:false})]);if(loanResult.error)throw loanResult.error;if(customerResult.error)throw customerResult.error;loans=(loanResult.data||[]).map(l=>({...l,paid_cents:(l.payments||[]).reduce((s,p)=>s+Number(p.amount_cents),0)}));customers=customerResult.data||[];const vault=getVault();await saveVault({...vault,customers,loans,lastSyncAt:new Date().toISOString()});render()}
 async function syncPending(){if(!navigator.onLine||offlineMode)throw new TypeError("Sin conexión segura para sincronizar.");const sb=await getSupabase();while(true){const vault=getVault();if(!vault.queue.length){await saveVault({...vault,lastSyncAt:new Date().toISOString()});return}const op=vault.queue[0];const {error}=await sb.from(op.entity).upsert(op.record,{onConflict:"id",ignoreDuplicates:true});if(error)throw error;await saveVault({...vault,queue:vault.queue.slice(1),lastSyncAt:new Date().toISOString()});status("Sincronizando registros pendientes…")}}
-function openForm(type,loan=null){entryType=type;selectedLoanId=loan?.id||null;$("#entry-title").textContent=type==="loan"?"Registrar préstamo":type==="repeat"?"Prestar de nuevo":"Registrar abono";$("#client-name").value=loan?.customers?.full_name||"";$("#client-name").readOnly=Boolean(loan);$("#months-field").hidden=type==="payment";$("#months").required=type!=="payment";$("#months").value="1";$("#terms-preview").hidden=type==="payment";$("#amount").value="";$("#entry-note").value="";$("#form-error").hidden=true;updatePreview();$("#entry-panel").hidden=false;$("#client-name").focus();$("#entry-panel").scrollIntoView({behavior:"smooth",block:"start"})}
+function openForm(type,loan=null){
+ entryType=type;selectedLoanId=loan?.id||null;
+ const isPayment=type==="payment";
+ $("#entry-title").textContent=type==="loan"?"Registrar préstamo":type==="repeat"?"Prestar de nuevo":"Registrar abono";
+ $("#client-name").value=loan?.customers?.full_name||"";
+ $("#client-name").readOnly=Boolean(loan);
+ $("#client-phone").value=loan?.customers?.phone||"";
+ $("#client-phone").readOnly=Boolean(loan);
+ $("#client-phone-field").hidden=isPayment;
+ $("#loan-date-field").hidden=isPayment;
+ $("#payment-date-field").hidden=!isPayment;
+ $("#loan-date").required=!isPayment;$("#payment-date").required=isPayment;
+ $("#loan-date").value=todayLocalDate();$("#payment-date").value=todayLocalDate();
+ $("#months-field").hidden=isPayment;$("#months").required=!isPayment;$("#months").value="1";
+ $("#terms-preview").hidden=isPayment;$("#amount").value="";$("#entry-note").value="";
+ $("#form-error").hidden=true;updatePreview();$("#entry-panel").hidden=false;
+ $("#client-name").focus();$("#entry-panel").scrollIntoView({behavior:"smooth",block:"start"});
+}
 function closeForm(){$("#entry-panel").hidden=true;$("#client-name").readOnly=false;selectedLoanId=null}
 async function saveEntry(event){
  event.preventDefault();const error=$("#form-error");error.hidden=true;const submit=event.submitter;submit.disabled=true;
@@ -42,31 +102,42 @@ async function saveEntry(event){
   const amountCents=parseMoney($("#amount").value),note=$("#entry-note").value.trim(),months=Number($("#months").value),now=new Date().toISOString();
   if(amountCents<=0)throw new Error("El monto debe ser mayor que cero.");
   if(entryType!=="payment"&&(!Number.isInteger(months)||months<1||months>120))throw new Error("El plazo debe ser de 1 a 120 meses.");
+  const loanDate=$("#loan-date").value,paidAt=$("#payment-date").value?dateInputTimestamp($("#payment-date").value):now;
+  if(entryType==="payment"&&!$("#payment-date").value)throw new Error("Selecciona la fecha del abono.");
+  if(entryType!=="payment"&&!loanDate)throw new Error("Selecciona la fecha del préstamo.");
   const vault=getVault();const nextCustomers=[...(vault.customers||[])];const nextLoans=[...(vault.loans||[])];const queue=[...(vault.queue||[])];
   if(entryType==="payment"){
    const loan=nextLoans.find(l=>l.id===selectedLoanId);if(!loan)throw new Error("No se identificó el préstamo exacto.");
    if(amountCents>balance(loan))throw new Error("El abono no puede superar el saldo pendiente.");
-   const payment={id:crypto.randomUUID(),owner_id:ownerId,loan_id:loan.id,amount_cents:amountCents,note,paid_at:now,created_at:now};
+   const payment={id:crypto.randomUUID(),owner_id:ownerId,loan_id:loan.id,amount_cents:amountCents,note,paid_at:paidAt,created_at:now};
    loan.payments=[...(loan.payments||[]),payment];loan.paid_cents=Number(loan.paid_cents||0)+amountCents;
    queue.push({id:payment.id,entity:"payments",record:payment,createdAt:now});
   }else{
    let customerId,customerName;
+   const fullName=$("#client-name").value.trim(),phone=$("#client-phone").value.trim();
    if(entryType==="repeat"){
     const source=nextLoans.find(l=>l.id===selectedLoanId);customerId=source?.customer_id;customerName=source?.customers?.full_name;
     if(!customerId)throw new Error("No se encontró el cliente del préstamo anterior.");
    }else{
-    const fullName=$("#client-name").value.trim();if(!fullName)throw new Error("Escribe el nombre del cliente.");
+    if(!fullName)throw new Error("Escribe el nombre del cliente.");
     const existing=nextCustomers.find(c=>String(c.full_name||"").trim().toLocaleLowerCase("es-NI")===fullName.toLocaleLowerCase("es-NI"));
-    if(existing){customerId=existing.id;customerName=existing.full_name}
-    else{
-     const customer={id:crypto.randomUUID(),owner_id:ownerId,full_name:fullName,notes:null,created_at:now,updated_at:now};
+    if(existing){
+     customerId=existing.id;customerName=existing.full_name;
+     if(phone&&phone!==String(existing.phone||"")){
+      const updated={...existing,phone,updated_at:now};const idx=nextCustomers.findIndex(c=>c.id===existing.id);nextCustomers[idx]=updated;
+      const pendingIndex=queue.findIndex(op=>op.entity==="customers"&&op.record.id===existing.id);
+      if(pendingIndex>=0)queue[pendingIndex]={id:existing.id,entity:"customers",record:updated,createdAt:now};
+      else queue.push({id:existing.id,entity:"customers",record:updated,createdAt:now});
+     }
+    }else{
+     const customer={id:crypto.randomUUID(),owner_id:ownerId,full_name:fullName,phone:phone||null,notes:null,created_at:now,updated_at:now};
      customerId=customer.id;customerName=customer.full_name;nextCustomers.unshift(customer);
      queue.push({id:customer.id,entity:"customers",record:customer,createdAt:now});
     }
    }
-   const interest=Math.round(amountCents*.15*months);
-   const record={id:crypto.randomUUID(),owner_id:ownerId,customer_id:customerId,principal_cents:amountCents,term_months:months,monthly_rate:.15,interest_cents:interest,total_due_cents:amountCents+interest,note,status:"active",created_at:now,updated_at:now};
-   nextLoans.unshift({...record,customers:{full_name:customerName},payments:[],paid_cents:0});
+   const terms=calculateLoanTerms(amountCents,months);
+   const record={id:crypto.randomUUID(),owner_id:ownerId,customer_id:customerId,loan_date:loanDate,principal_cents:amountCents,term_months:months,monthly_rate:terms.monthlyRate,interest_cents:terms.interestCents,total_due_cents:terms.totalDueCents,note,status:"active",created_at:now,updated_at:now};
+   nextLoans.unshift({...record,customers:{full_name:customerName,phone:phone||nextCustomers.find(c=>c.id===customerId)?.phone||null},payments:[],paid_cents:0});
    queue.push({id:record.id,entity:"loans",record,createdAt:now});
   }
   await saveVault({...vault,customers:nextCustomers,loans:nextLoans,queue});
@@ -74,9 +145,7 @@ async function saveEntry(event){
   if(navigator.onLine&&!offlineMode){
    try{await syncPending();await loadData();status("Guardado y sincronizado.",true);toast(entryType==="payment"?"Abono registrado y sincronizado.":"Préstamo registrado y sincronizado.");}
    catch(syncError){offlineMode=true;await loadLocalData();const pending=getVault().queue.length;if(pending){status("Registro guardado en este dispositivo; la sincronización está pendiente.");toast("Guardado localmente. Pendiente de sincronización.");}else{status("El registro está guardado, pero no se pudo actualizar la lista desde el servidor. Reintenta con tu PIN.");toast("Datos locales conservados; falta confirmar la actualización.");}}
-  }else{
-   status("Registro guardado en este dispositivo; pendiente de sincronización.");toast("Guardado localmente. Pendiente de sincronización.");
-  }
+  }else{status("Registro guardado en este dispositivo; pendiente de sincronización.");toast("Guardado localmente. Pendiente de sincronización.");}
  }catch(ex){error.textContent=ex.message||"No se pudo guardar el movimiento.";error.hidden=false}
  finally{submit.disabled=false}
 }
@@ -174,6 +243,6 @@ window.addEventListener("online",()=>{if(isUnlocked&&offlineMode){void lockToPin
 $("#entry-form").addEventListener("submit",saveEntry);$("#amount").addEventListener("blur",()=>{try{if($("#amount").value)$("#amount").value=money(parseMoney($("#amount").value))}catch{}});$("#amount").addEventListener("input",updatePreview);$("#months").addEventListener("input",updatePreview);
 $("#show-loan-form").addEventListener("click",()=>openForm("loan"));$("#show-payment-form").addEventListener("click",()=>{const active=loans.filter(l=>balance(l)>0);if(active.length===1)openForm("payment",active[0]);else toast("Elige «＋ Abono» en el préstamo correspondiente.")});$("#close-form").addEventListener("click",closeForm);$("#cancel-form").addEventListener("click",closeForm);$("#search").addEventListener("input",render);
 $("#record-list").addEventListener("click",e=>{const pay=e.target.closest("[data-pay]"),view=e.target.closest("[data-view]");if(pay){const loan=loans.find(l=>l.id===pay.dataset.pay);if(loan)openForm("payment",loan)}if(view){const details=$("#detail-"+CSS.escape(view.dataset.view));if(details)details.hidden=!details.hidden}});
-$("#record-list").addEventListener("change",e=>{const menu=e.target.closest("[data-menu]");if(!menu||!menu.value)return;const loan=loans.find(l=>l.id===menu.dataset.menu);if(menu.value==="repeat")openForm("repeat",loan);if(menu.value==="payments")toast((loan?.payments||[]).length?loan.payments.map(p=>date(p.paid_at)+" · "+money(p.amount_cents)).join(" | "):"Este préstamo todavía no tiene abonos.");menu.value=""});
+$("#record-list").addEventListener("change",e=>{const menu=e.target.closest("[data-menu]");if(!menu||!menu.value)return;const loan=loans.find(l=>l.id===menu.dataset.menu);if(menu.value==="repeat")openForm("repeat",loan);if(menu.value==="payments"){const detail=$("#detail-"+CSS.escape(menu.dataset.menu));if(detail){detail.hidden=false;detail.scrollIntoView({behavior:"smooth",block:"nearest"})}}menu.value=""});
 function setFontZoom(value){let desired=Number(value);if(!Number.isFinite(desired))desired=1;const scale=Math.max(.9,Math.min(1.3,Math.round(desired*10)/10));document.documentElement.style.zoom=String(scale);localStorage.setItem("control-prestamos-font-zoom",String(scale));$("#font-size-level").value=String(Math.round(scale*100));$("#font-size-value").textContent=String(Math.round(scale*100))+"%"}setFontZoom(Number(localStorage.getItem("control-prestamos-font-zoom")||1));$("#font-size-level").addEventListener("input",event=>setFontZoom(Number(event.currentTarget.value)/100));
 openOperatorSession().catch(async ex=>{showApp(false);if(await hasVault()){offlineMode=true;showPairForm("unlock");$("#pairing-title").textContent="Control Préstamos sin conexión";$("#pairing-description").textContent="Introduce el PIN para abrir la copia local cifrada.";status("No se pudo contactar con el servidor. Puedes entrar con el PIN local.");}else{$("#pairing-title").textContent="No se pudo abrir el acceso";$("#pairing-description").textContent=ex.message||"No se pudo autorizar este dispositivo.";status(ex.message||"Error de conexión.");}});
