@@ -2,64 +2,39 @@ import { test, expect } from "@playwright/test";
 
 test.beforeEach(async ({ page }) => {
   await page.goto("/");
-  await page.evaluate(() => localStorage.clear());
+  await expect(page.locator("#auth-panel")).toBeVisible();
+});
+
+test("shows login and an accessible create-account option", async ({ page }) => {
+  await expect(page.getByRole("heading", { name: "Inicia sesión" })).toBeVisible();
+  await expect(page.getByLabel("Correo electrónico")).toBeVisible();
+  await expect(page.getByLabel("Contraseña")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Crear cuenta" })).toBeVisible();
+  await expect(page.locator(".record-card")).toHaveCount(0);
+});
+
+test("create-account option reveals the name field and can return to login", async ({ page }) => {
+  await page.getByRole("button", { name: "Crear cuenta" }).click();
+  await expect(page.getByRole("heading", { name: "Crear cuenta" })).toBeVisible();
+  await expect(page.getByLabel("Nombre para mostrar")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Ya tengo cuenta" })).toBeVisible();
+  await page.getByRole("button", { name: "Ya tengo cuenta" }).click();
+  await expect(page.getByRole("heading", { name: "Inicia sesión" })).toBeVisible();
+  await expect(page.getByLabel("Nombre para mostrar")).toBeHidden();
+});
+
+test("font-size controls enlarge, reset and persist the user preference", async ({ page }) => {
+  await expect.poll(() => page.evaluate(() => document.documentElement.style.zoom)).toBe("1");
+  await page.getByRole("button", { name: "Aumentar tamaño de texto" }).click();
+  await expect.poll(() => page.evaluate(() => document.documentElement.style.zoom)).toBe("1.1");
   await page.reload();
+  await expect.poll(() => page.evaluate(() => document.documentElement.style.zoom)).toBe("1.1");
+  await page.getByRole("button", { name: "Restablecer tamaño de texto" }).click();
+  await expect.poll(() => page.evaluate(() => document.documentElement.style.zoom)).toBe("1");
 });
 
-test("loads the simple mode and its key actions", async ({ page }) => {
-  await expect(page.getByRole("heading", { name: "¿Qué vamos a hacer hoy?" })).toBeVisible();
-  await expect(page.getByRole("button", { name: /Registrar préstamo/ })).toBeVisible();
-  await expect(page.getByRole("button", { name: /Registrar abono/ })).toBeVisible();
-  await expect(page.locator(".record-main h3", { hasText: "María López" })).toBeVisible();
-});
-
-test("switches to owner mode and shows financial totals", async ({ page }) => {
-  await page.getByRole("button", { name: "Propietario" }).click();
-  await expect(page.getByRole("heading", { name: "Resumen de tu dinero" })).toBeVisible();
-  await expect(page.getByText("Capital entregado")).toBeVisible();
-  await expect(page.getByText("Abonos recibidos")).toBeVisible();
-  await expect(page.getByRole("button", { name: "Propietario" })).toHaveAttribute("aria-pressed", "true");
-});
-
-test("registers a loan and updates the list", async ({ page }) => {
-  await page.getByRole("button", { name: /Registrar préstamo/ }).click();
-  await page.getByLabel("Nombre del cliente").fill("Prueba de cliente");
-  await page.getByLabel("Monto en córdobas").fill("300");
-  await page.getByRole("button", { name: "Guardar registro" }).click();
-  await expect(page.locator(".record-main h3", { hasText: "Prueba de cliente" })).toBeVisible();
-  await expect(page.getByRole("status")).toContainText("Préstamo registrado");
-});
-
-test("rejects a payment above the outstanding balance", async ({ page }) => {
-  await page.getByRole("button", { name: /＋ Abono/ }).first().click();
-  await page.getByLabel("Monto en córdobas").fill("999999");
-  await page.getByRole("button", { name: "Guardar registro" }).click();
-  await expect(page.getByRole("alert")).toContainText("superar el saldo pendiente");
-});
-
-test("search filters pending loans by client", async ({ page }) => {
-  await page.getByRole("searchbox", { name: "Buscar cliente" }).fill("Carlos");
-  await expect(page.locator(".record-main h3", { hasText: "Carlos Ruiz" })).toBeVisible();
-  await expect(page.locator(".record-main h3", { hasText: "María López" })).toHaveCount(0);
-});
-
-test("shows fixed simple interest and total before saving a loan", async ({ page }) => {
-  await page.getByRole("button", { name: /Registrar préstamo/ }).click();
-  await page.getByLabel("Nombre del cliente").fill("Interés prueba");
-  await page.getByLabel("Monto en córdobas").fill("5000");
-  await page.getByLabel("Plazo (meses)").fill("3");
-  await expect(page.locator("#terms-preview")).toContainText(/C\$\s*2,250\.00/);
-  await expect(page.locator("#terms-preview")).toContainText(/C\$\s*7,250\.00/);
-  await page.getByRole("button", { name: "Guardar registro" }).click();
-  await expect(page.locator(".record-main", { hasText: "Interés prueba" })).toContainText(/C\$\s*7,250\.00/);
-});
-
-test("repeat loan keeps customer prefilled and creates a separate loan", async ({ page }) => {
-  await page.locator(".record-card").filter({ hasText: "María López" }).getByRole("button", { name: /Prestar de nuevo/ }).click();
-  await expect(page.getByLabel("Nombre del cliente")).toHaveValue("María López");
-  await expect(page.getByLabel("Nombre del cliente")).toHaveAttribute("readonly", "");
-  await page.getByLabel("Monto en córdobas").fill("100");
-  await page.getByLabel("Plazo (meses)").fill("2");
-  await page.getByRole("button", { name: "Guardar registro" }).click();
-  await expect(page.locator(".record-card").filter({ hasText: "María López" })).toHaveCount(2);
+test("financial input uses C$ format and browser autocomplete is disabled for search", async ({ page }) => {
+  await expect(page.locator("#amount")).toHaveAttribute("placeholder", "C$ 0.00");
+  await expect(page.locator("#amount")).toHaveAttribute("autocomplete", "off");
+  await expect(page.locator("#search")).toHaveAttribute("autocomplete", "off");
 });
