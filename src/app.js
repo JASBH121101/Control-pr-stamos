@@ -149,7 +149,7 @@ function openForm(type,loan=null){
  $("#payment-date-field").hidden=!isPayment;
  $("#loan-date").required=!isPayment;
  $("#payment-date").required=isPayment;
- $("#loan-date").value=loan?.loan_date||todayLocalDate();
+ $("#loan-date").value=todayLocalDate();
  $("#payment-date").value=todayLocalDate();
  $("#months-field").hidden=isPayment;$("#months").required=!isPayment;$("#months").value="1";
  $("#terms-preview").hidden=isPayment;$("#amount").value="";$("#entry-note").value="";
