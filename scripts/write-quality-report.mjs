@@ -48,7 +48,7 @@ const lines = [
   "",
   "- La suite verifica reglas de dominio, flujos de interfaz, accesibilidad automatizada y ausencia de desbordamiento horizontal en 360, 390, 430, 768, 1024, 1280 y 1440 px.",
   "- Las capturas se guardan como artefactos para inspección visual; no equivalen a una comparación pixel a pixel contra una línea base aprobada.",
-  "- Esta app es un prototipo local. No se prueban todavía autenticación real, sincronización entre dispositivos, permisos del servidor ni despliegue Android.",
+  "- La suite automatizada de esta versión cubre autenticación como interfaz, accesibilidad y responsive; las comprobaciones con credenciales reales, sincronización entre usuarios/dispositivos y la publicación Android deben validarse aparte.",
   ""
 ];
 await writeFile("reports/quality-audit.md", lines.join("\n"));
