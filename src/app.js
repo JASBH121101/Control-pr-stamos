@@ -33,6 +33,13 @@ function displayDay(value){
  const normalized=/^\d{4}-\d{2}-\d{2}$/.test(raw)?raw+"T12:00:00-06:00":raw;
  return new Intl.DateTimeFormat("es-NI",{dateStyle:"medium",timeZone:"America/Managua"}).format(new Date(normalized));
 }
+function syncDateFieldState(input){if(input)input.classList.toggle("date-empty",!input.value)}
+for(const selector of ["#loan-date","#payment-date"]){
+ const input=$(selector);
+ input.addEventListener("input",()=>syncDateFieldState(input));
+ input.addEventListener("change",()=>syncDateFieldState(input));
+ syncDateFieldState(input);
+}
 function toast(message){const t=$("#toast");t.textContent=message;t.hidden=false;setTimeout(()=>t.hidden=true,3000)}
 function setConnection(text,ok=false){$("#connection-status").innerHTML="<strong>Conexión:</strong> "+esc(text);$("#connection-status").style.borderColor=ok?"#b7e7ce":"#f0d9a6";$("#connection-status").style.background=ok?"#f0fff6":"#fff9e9"}
 function showAuth(show){
@@ -161,7 +168,7 @@ function openForm(type,loan=null){
  $("#payment-date-field").hidden=!isPayment;
  $("#loan-date").required=!isPayment;$("#payment-date").required=isPayment;
  $("#loan-date").max=todayLocalDate();$("#payment-date").max=todayLocalDate();
- $("#loan-date").value="";$("#payment-date").value="";
+ $("#loan-date").value="";$("#payment-date").value="";syncDateFieldState($("#loan-date"));syncDateFieldState($("#payment-date"));
  $("#months-field").hidden=isPayment;$("#months").required=!isPayment;$("#months").value="";
  $("#terms-preview").hidden=isPayment;$("#amount").value="";$("#entry-note").value="";
  $("#form-error").hidden=true;updatePreview();$("#entry-panel").hidden=false;
