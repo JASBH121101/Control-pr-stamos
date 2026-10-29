@@ -25,7 +25,7 @@ function bufferToBase64url(value) {
   const bytes = new Uint8Array(value);
   let binary = "";
   for (const byte of bytes) binary += String.fromCharCode(byte);
-  return btoa(binary).replace(/\\+/g, "-").replace(/\\//g, "_").replace(/=+$/g, "");
+  return btoa(binary).replaceAll("+", "-").replaceAll("/", "_").replace(/=+$/g, "");
 }
 function extensionBytes(value) {
   if (value instanceof ArrayBuffer) return new Uint8Array(value);
