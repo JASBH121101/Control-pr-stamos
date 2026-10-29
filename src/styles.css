@@ -71,3 +71,8 @@ input[type="date"].date-empty::-webkit-datetime-edit-month-field,
 input[type="date"].date-empty::-webkit-datetime-edit-day-field,
 input[type="date"].date-empty::-webkit-datetime-edit-year-field{color:transparent}
 input[type="date"].date-empty::-webkit-calendar-picker-indicator{opacity:1;cursor:pointer}
+
+/* Hide native date-format text while empty; keep the calendar icon usable. */
+input[type="date"].date-empty{color:transparent}
+input[type="date"].date-empty::-webkit-datetime-edit{color:transparent}
+input[type="date"].date-empty::-webkit-calendar-picker-indicator{opacity:1;cursor:pointer}
