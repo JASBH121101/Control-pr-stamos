@@ -73,7 +73,7 @@ async function saveEntry(event){
   customers=nextCustomers;loans=nextLoans;render();closeForm();
   if(navigator.onLine&&!offlineMode){
    try{await syncPending();await loadData();status("Guardado y sincronizado.",true);toast(entryType==="payment"?"Abono registrado y sincronizado.":"Préstamo registrado y sincronizado.");}
-   catch(syncError){offlineMode=true;await loadLocalData();status("Registro guardado en este dispositivo; la sincronización está pendiente.");toast("Guardado localmente. Pendiente de sincronización.");}
+   catch(syncError){offlineMode=true;await loadLocalData();const pending=getVault().queue.length;if(pending){status("Registro guardado en este dispositivo; la sincronización está pendiente.");toast("Guardado localmente. Pendiente de sincronización.");}else{status("El registro está guardado, pero no se pudo actualizar la lista desde el servidor. Reintenta con tu PIN.");toast("Datos locales conservados; falta confirmar la actualización.");}}
   }else{
    status("Registro guardado en este dispositivo; pendiente de sincronización.");toast("Guardado localmente. Pendiente de sincronización.");
   }
@@ -121,7 +121,7 @@ async function handleUnlock(event){
   }
   offlineMode=false;isUnlocked=true;lastTouch=Date.now();
   try{await syncPending();await loadData();showApp(true);status("Dispositivo desbloqueado y sincronizado.",true)}
-  catch(syncError){offlineMode=true;await loadLocalData();showApp(true);status("Acceso local habilitado. Hay registros pendientes; se conservaron y no se descartarán. Reintenta tras comprobar la conexión.");}
+  catch(syncError){offlineMode=true;await loadLocalData();showApp(true);const pending=getVault().queue.length;status(pending?"Acceso local habilitado. Hay registros pendientes; se conservaron y no se descartarán. Reintenta tras comprobar la conexión.":"La copia local está disponible, pero no se pudo actualizar la lista del servidor. Reintenta con tu PIN.");}
   armIdleLock();$("#operator-pin").value="";
  }catch(ex){
   if(isNetworkError(ex)&&await hasVault()){
