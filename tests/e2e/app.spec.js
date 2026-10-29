@@ -38,3 +38,12 @@ test("financial input uses C$ format and browser autocomplete is disabled for se
   await expect(page.locator("#amount")).toHaveAttribute("autocomplete", "off");
   await expect(page.locator("#search")).toHaveAttribute("autocomplete", "off");
 });
+
+test("operator page is separate and does not request username or password", async ({ page }) => {
+  await page.goto("/operador.html");
+  await expect(page.getByRole("heading", { name: "Preparando tu acceso" })).toBeVisible();
+  await expect(page.getByLabel("Correo electrónico")).toHaveCount(0);
+  await expect(page.getByLabel("Contraseña")).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "A+ Aumentar tamaño de texto" })).toBeVisible();
+  await expect(page.locator("#show-loan-form")).toBeAttached();
+});

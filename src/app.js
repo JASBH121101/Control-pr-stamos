@@ -5,7 +5,14 @@ const SUPABASE_URL = "https://ctdcqwffzhpzgevqahob.supabase.co";
 const SUPABASE_KEY = "sb_publishable_OV4MxEx5M-nRNQWnaOVXcA_B7YW8z73";
 const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 const $ = (s) => document.querySelector(s);
-let user = null, mode = "simple", entryType = "loan", selectedLoanId = null, loans = [], authMode = "login";
+let user = null, userRole = null, mode = "owner", entryType = "loan", selectedLoanId = null, loans = [], authMode = "login";
+const OWNER_CLAIM_KEY = "control-prestamos-pending-owner-claim";
+const ownerCodeFromUrl = new URLSearchParams(location.search).get("owner");
+if (ownerCodeFromUrl) {
+  localStorage.setItem(OWNER_CLAIM_KEY, ownerCodeFromUrl);
+  const cleanUrl = new URL(location.href); cleanUrl.searchParams.delete("owner");
+  history.replaceState({}, "", cleanUrl.pathname + cleanUrl.hash);
+}
 const money = (cents) => formatCordobas(Number(cents || 0));
 const esc = (v) => String(v ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 const date = (v) => new Intl.DateTimeFormat("es-NI",{dateStyle:"medium",timeStyle:"short",timeZone:"America/Managua"}).format(new Date(v));
@@ -13,8 +20,57 @@ function toast(message){const t=$("#toast");t.textContent=message;t.hidden=false
 function setConnection(text,ok=false){$("#connection-status").innerHTML="<strong>Conexión:</strong> "+esc(text);$("#connection-status").style.borderColor=ok?"#b7e7ce":"#f0d9a6";$("#connection-status").style.background=ok?"#f0fff6":"#fff9e9"}
 function showAuth(show){$("#auth-panel").hidden=!show;document.querySelectorAll(".app-only").forEach(n=>n.hidden=show);$("#signout-button").hidden=show}
 function setAuthMode(next){authMode=next;$("#auth-title").textContent=next==="login"?"Inicia sesión":"Crear cuenta";$("#auth-description").textContent=next==="login"?"Entra para consultar tus registros sincronizados.":"Crea tu acceso privado. Usa un correo al que puedas acceder.";$("#auth-submit").textContent=next==="login"?"Iniciar sesión":"Crear cuenta";$("#toggle-auth-mode").textContent=next==="login"?"Crear cuenta":"Ya tengo cuenta";$("#auth-name").hidden=next==="login";$("#auth-name-label").hidden=next==="login";$("#auth-password").autocomplete=next==="login"?"current-password":"new-password";$("#auth-error").hidden=true}
-async function ensureProfile(){const {data,error}=await supabase.from("profiles").select("id").eq("id",user.id).maybeSingle();if(error)throw error;if(!data){const {error:e}=await supabase.from("profiles").insert({id:user.id,display_name:user.user_metadata?.display_name||user.email?.split("@")[0]||"Usuario"});if(e)throw e}}
-async function authSubmit(e){e.preventDefault();const err=$("#auth-error");err.hidden=true;const email=$("#auth-email").value.trim(),password=$("#auth-password").value;$("#auth-submit").disabled=true;try{if(authMode==="login"){const {data,error}=await supabase.auth.signInWithPassword({email,password});if(error)throw error;user=data.user}else{const {data,error}=await supabase.auth.signUp({email,password,options:{data:{display_name:$("#auth-name").value.trim()||email.split("@")[0]}}});if(error)throw error;if(!data.session){setAuthMode("login");err.textContent="Cuenta creada. Revisa tu correo para confirmar la dirección y después inicia sesión.";err.hidden=false;return}user=data.user}await ensureProfile();showAuth(false);await loadData();setConnection("Conectado y sincronizado",true)}catch(ex){err.textContent=ex.message||"No se pudo iniciar sesión.";err.hidden=false}finally{$("#auth-submit").disabled=false}}
+async function sha256Hex(value) {
+ const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value));
+ return Array.from(new Uint8Array(digest), b => b.toString(16).padStart(2,"0")).join("");
+}
+async function claimOwnerIfPending() {
+ const token = localStorage.getItem(OWNER_CLAIM_KEY);
+ if (!token) return false;
+ const { error } = await supabase.rpc("claim_control_prestamos_owner", { p_code_hash: await sha256Hex(token) });
+ if (error) throw error;
+ localStorage.removeItem(OWNER_CLAIM_KEY);
+ return true;
+}
+async function ensureProfile() {
+ const { data, error } = await supabase.from("profiles").select("id,role,display_name").eq("id", user.id).maybeSingle();
+ if (error) throw error;
+ if (!data) throw new Error("No se encontró el perfil de esta cuenta. Contacta al administrador.");
+ userRole = data.role;
+ if (userRole !== "owner") throw new Error("Esta cuenta no tiene acceso al panel propietario. Abre el enlace de configuración o inicia sesión con la cuenta propietaria.");
+ return data;
+}
+async function authSubmit(e) {
+ e.preventDefault();
+ const err = $("#auth-error"); err.hidden = true;
+ const email = $("#auth-email").value.trim(), password = $("#auth-password").value;
+ $("#auth-submit").disabled = true;
+ try {
+  if (authMode === "login") {
+   const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+   if (error) throw error;
+   user = data.user;
+  } else {
+   if (!localStorage.getItem(OWNER_CLAIM_KEY)) throw new Error("Para crear la cuenta propietaria, abre primero el enlace seguro de configuración.");
+   const { data, error } = await supabase.auth.signUp({ email, password, options: { data: { display_name: $("#auth-name").value.trim() || email.split("@")[0] } } });
+   if (error) throw error;
+   if (!data.session) {
+    setAuthMode("login");
+    err.textContent = "Cuenta creada. Confirma el correo y vuelve a esta página en el mismo navegador para activar el panel propietario.";
+    err.hidden = false;
+    return;
+   }
+   user = data.user;
+  }
+  await claimOwnerIfPending();
+  await ensureProfile();
+  showAuth(false); setMode("owner"); await loadData(); await loadOperatorDevices();
+  setConnection("Conectado y sincronizado", true);
+ } catch (ex) {
+  err.textContent = ex.message || "No se pudo iniciar sesión."; err.hidden = false;
+  if (user) { await supabase.auth.signOut(); user = null; userRole = null; showAuth(true); }
+ } finally { $("#auth-submit").disabled = false; }
+}
 function balance(loan){return Math.max(0,Number(loan.total_due_cents)-Number(loan.paid_cents||0))}
 function render(){
  const outstanding=loans.reduce((s,l)=>s+balance(l),0), principal=loans.reduce((s,l)=>s+Number(l.principal_cents),0), paid=loans.reduce((s,l)=>s+Number(l.paid_cents||0),0), active=loans.filter(l=>balance(l)>0).length;
@@ -36,14 +92,62 @@ $("#amount").addEventListener("blur",()=>{try{if($("#amount").value)$("#amount")
 $("#amount").addEventListener("input",updatePreview);$("#months").addEventListener("input",updatePreview);
 $("#entry-form").addEventListener("submit",async e=>{e.preventDefault();const error=$("#form-error");error.hidden=true;const submit=e.submitter;submit.disabled=true;try{const amountCents=parseMoney($("#amount").value),note=$("#entry-note").value.trim(),months=Number($("#months").value);if(amountCents<=0)throw new Error("El monto debe ser mayor que cero.");if(entryType==="payment"){const loan=loans.find(l=>l.id===selectedLoanId);if(!loan)throw new Error("No se identificó el préstamo exacto.");if(amountCents>balance(loan))throw new Error("El abono no puede superar el saldo pendiente.");const {error:e}=await supabase.from("payments").insert({owner_id:user.id,loan_id:loan.id,amount_cents:amountCents,note});if(e)throw e}else{let customerId;if(entryType==="repeat"){const source=loans.find(l=>l.id===selectedLoanId);customerId=source?.customer_id;if(!customerId)throw new Error("No se encontró el cliente.")}else{const {data:customer,error:ce}=await supabase.from("customers").insert({owner_id:user.id,full_name:$("#client-name").value.trim(),notes:null}).select("id").single();if(ce)throw ce;customerId=customer.id}const {error:e}=await supabase.from("loans").insert({owner_id:user.id,customer_id:customerId,principal_cents:amountCents,term_months:months,note});if(e)throw e}await loadData();closeForm();toast(entryType==="payment"?"Abono guardado.":"Préstamo guardado y sincronizado.")}catch(ex){error.textContent=ex.message||"No se pudo guardar.";error.hidden=false}finally{submit.disabled=false}});
 $("#auth-form").addEventListener("submit",authSubmit);$("#toggle-auth-mode").addEventListener("click",()=>setAuthMode(authMode==="login"?"signup":"login"));
-$("#signout-button").addEventListener("click",async()=>{await supabase.auth.signOut();user=null;loans=[];showAuth(true);render();setConnection("Sesión cerrada")});
-$("#simple-mode").addEventListener("click",()=>setMode("simple"));$("#owner-mode").addEventListener("click",()=>setMode("owner"));
-function setMode(next){mode=next;$("#simple-mode").classList.toggle("is-active",mode==="simple");$("#owner-mode").classList.toggle("is-active",mode==="owner");$("#simple-mode").setAttribute("aria-pressed",String(mode==="simple"));$("#owner-mode").setAttribute("aria-pressed",String(mode==="owner"));document.body.classList.toggle("owner-mode",mode==="owner");document.querySelectorAll(".owner-only").forEach(n=>n.hidden=mode!=="owner");$("#page-title").textContent=mode==="simple"?"¿Qué vamos a hacer hoy?":"Resumen de tu dinero";$("#page-description").textContent=mode==="simple"?"Registra un préstamo o un abono en pocos pasos.":"Consulta saldos y movimientos registrados.";$("#records-title").textContent=mode==="simple"?"Préstamos pendientes":"Cartera de préstamos"}
+$("#signout-button").addEventListener("click",async()=>{await supabase.auth.signOut();user=null;userRole=null;loans=[];showAuth(true);render();setConnection("Sesión cerrada")});
+async function createOperatorInvite(){
+ const err=$("#device-admin-error");err.hidden=true;
+ try{
+  const bytes=crypto.getRandomValues(new Uint8Array(32));
+  const token=Array.from(bytes,b=>b.toString(16).padStart(2,"0")).join("");
+  const token_hash=await sha256Hex(token);
+  const {error}=await supabase.from("operator_pairing_codes").insert({owner_id:user.id,token_hash});
+  if(error)throw error;
+  const url=new URL("operador.html",location.href);url.searchParams.set("pair",token);
+  $("#operator-invite-url").value=url.href;$("#operator-invite-panel").hidden=false;
+  try{await navigator.clipboard.writeText(url.href);toast("Enlace generado y copiado. Compártelo únicamente con papá.");}catch{toast("Enlace generado. Usa el botón Copiar enlace.");}
+  await loadOperatorDevices();
+ }catch(ex){err.textContent=ex.message||"No se pudo generar el enlace.";err.hidden=false}
+}
+async function loadOperatorDevices(){
+ const list=$("#operator-device-list");if(!list||!user)return;
+ const {data,error}=await supabase.from("operator_devices").select("id,device_name,is_active,paired_at,last_seen_at").eq("owner_id",user.id).order("paired_at",{ascending:false});
+ if(error){list.innerHTML='<p class="empty-state">No se pudieron cargar los dispositivos.</p>';return;}
+ if(!data?.length){list.innerHTML='<p class="empty-state">Todavía no hay dispositivos vinculados.</p>';return;}
+ list.innerHTML=data.map(d=>`<div class="device-row"><div><strong>${esc(d.device_name)}</strong><small>Vinculado: ${formatDate(d.paired_at)}</small><small>${d.last_seen_at?"Última actividad: "+formatDate(d.last_seen_at):"Sin actividad reciente"}</small></div><span class="device-status ${d.is_active?"":"revoked"}">${d.is_active?"ACTIVO":"REVOCADO"}</span>${d.is_active?`<button class="device-revoke" data-revoke-device="${d.id}" type="button">Revocar</button>`:""}</div>`).join("");
+}
+$("#create-operator-invite").addEventListener("click",createOperatorInvite);
+$("#copy-operator-invite").addEventListener("click",async()=>{try{await navigator.clipboard.writeText($("#operator-invite-url").value);toast("Enlace copiado.")}catch{ $("#operator-invite-url").focus();$("#operator-invite-url").select();toast("Copia el enlace seleccionado.")}});
+$("#refresh-operator-devices").addEventListener("click",loadOperatorDevices);
+$("#operator-device-list").addEventListener("click",async e=>{const b=e.target.closest("[data-revoke-device]");if(!b)return;if(!confirm("¿Revocar el acceso de este dispositivo? Dejará de poder ver y modificar préstamos."))return;const {error}=await supabase.from("operator_devices").update({is_active:false}).eq("id",b.dataset.revokeDevice).eq("owner_id",user.id);if(error){toast("No se pudo revocar: "+error.message);return}toast("Acceso revocado.");await loadOperatorDevices()});
+
+function setMode(next="owner"){
+ mode="owner";
+ document.body.classList.add("owner-mode");
+ document.querySelectorAll(".owner-only").forEach(n=>n.hidden=false);
+ const title=$("#page-title"), description=$("#page-description"), records=$("#records-title");
+ if(title)title.textContent="Resumen de tu dinero";
+ if(description)description.textContent="Consulta saldos, ganancias cobradas y movimientos registrados.";
+ if(records)records.textContent="Cartera de préstamos";
+ const label=document.querySelector(".owner-label"); if(label)label.hidden=false;
+}
 $("#show-loan-form").addEventListener("click",()=>openForm("loan"));$("#show-payment-form").addEventListener("click",()=>{const active=loans.filter(l=>balance(l)>0);if(active.length===1)openForm("payment",active[0]);else toast("Elige «＋ Abono» en el préstamo correspondiente.")});
 $("#close-form").addEventListener("click",closeForm);$("#cancel-form").addEventListener("click",closeForm);$("#search").addEventListener("input",render);
 $("#record-list").addEventListener("click",e=>{const pay=e.target.closest("[data-pay]"),view=e.target.closest("[data-view]");if(pay){const loan=loans.find(l=>l.id===pay.dataset.pay);if(loan)openForm("payment",loan)}if(view){const d=$("#detail-"+CSS.escape(view.dataset.view));if(d)d.hidden=!d.hidden}});
 $("#record-list").addEventListener("change",e=>{const menu=e.target.closest("[data-menu]");if(!menu||!menu.value)return;const loan=loans.find(l=>l.id===menu.dataset.menu);if(menu.value==="repeat")openForm("repeat",loan);if(menu.value==="payments")toast((loan?.payments||[]).length?loan.payments.map(p=>date(p.paid_at)+" · "+money(p.amount_cents)).join(" | "):"Este préstamo todavía no tiene abonos.");menu.value=""});
-async function start(){showAuth(true);setAuthMode("login");setConnection("Conectando…");try{const {data:{session},error}=await supabase.auth.getSession();if(error)throw error;if(session){user=session.user;await ensureProfile();showAuth(false);await loadData();setConnection("Conectado y sincronizado",true)}else{loans=[];render();setConnection("Base de datos lista; inicia sesión para entrar",true)}}catch(ex){setConnection("No se pudo conectar: "+ex.message);$("#auth-error").textContent=ex.message;$("#auth-error").hidden=false}}
+async function start(){
+ showAuth(true);setAuthMode("login");setConnection("Conectando…");
+ try{
+  const {data:{session},error}=await supabase.auth.getSession();if(error)throw error;
+  if(session){
+   user=session.user;
+   await claimOwnerIfPending();
+   await ensureProfile();
+   showAuth(false);setMode("owner");await loadData();await loadOperatorDevices();
+   setConnection("Conectado y sincronizado",true);
+  }else{
+   setConnection(localStorage.getItem(OWNER_CLAIM_KEY)?"Enlace de configuración listo. Crea tu cuenta propietaria.":"Listo. Usa el enlace seguro de configuración para crear la cuenta propietaria.",true);
+  }
+ }catch(ex){setConnection("Acceso no disponible: "+ex.message);$("#auth-error").textContent=ex.message;$("#auth-error").hidden=false;}
+}
 function setFontZoom(value){const scale=Math.max(.9,Math.min(1.3,Math.round(value*100)/100));document.documentElement.style.zoom=String(scale);localStorage.setItem("control-prestamos-font-zoom",String(scale));$("#font-smaller").disabled=scale<=.9;$("#font-larger").disabled=scale>=1.3;$("#font-reset").disabled=scale===1}
 setFontZoom(Number(localStorage.getItem("control-prestamos-font-zoom")||1));
 $("#font-smaller").addEventListener("click",()=>setFontZoom(Number(document.documentElement.style.zoom||1)-.1));
