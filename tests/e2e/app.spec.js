@@ -42,3 +42,24 @@ test("search filters pending loans by client", async ({ page }) => {
   await expect(page.locator(".record-main h3", { hasText: "Carlos Ruiz" })).toBeVisible();
   await expect(page.locator(".record-main h3", { hasText: "María López" })).toHaveCount(0);
 });
+
+test("shows fixed simple interest and total before saving a loan", async ({ page }) => {
+  await page.getByRole("button", { name: /Registrar préstamo/ }).click();
+  await page.getByLabel("Nombre del cliente").fill("Interés prueba");
+  await page.getByLabel("Monto en córdobas").fill("5000");
+  await page.getByLabel("Plazo (meses)").fill("3");
+  await expect(page.locator("#terms-preview")).toContainText("C$ 2,250.00");
+  await expect(page.locator("#terms-preview")).toContainText("C$ 7,250.00");
+  await page.getByRole("button", { name: "Guardar registro" }).click();
+  await expect(page.locator(".record-main", { hasText: "Interés prueba" })).toContainText("C$ 7,250.00");
+});
+
+test("repeat loan keeps customer prefilled and creates a separate loan", async ({ page }) => {
+  await page.locator(".record-card").filter({ hasText: "María López" }).getByRole("button", { name: /Prestar de nuevo/ }).click();
+  await expect(page.getByLabel("Nombre del cliente")).toHaveValue("María López");
+  await expect(page.getByLabel("Nombre del cliente")).toHaveAttribute("readonly", "");
+  await page.getByLabel("Monto en córdobas").fill("100");
+  await page.getByLabel("Plazo (meses)").fill("2");
+  await page.getByRole("button", { name: "Guardar registro" }).click();
+  await expect(page.locator(".record-card").filter({ hasText: "María López" })).toHaveCount(2);
+});
