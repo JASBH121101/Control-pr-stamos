@@ -55,7 +55,7 @@ test("summarizes principal, payments, balance, expected and collected interest",
   const summary = summarizeLoans([a, b]);
   assert.equal(summary.principalCents, 520000);
   assert.equal(summary.paidCents, 600000);
-  assert.equal(summary.outstandingCents, 140000);
+  assert.equal(summary.outstandingCents, 148000);
   assert.equal(summary.interestExpectedCents, 228000);
   assert.equal(summary.interestCollectedCents, 100000);
   assert.equal(summary.activeCount, 2);
