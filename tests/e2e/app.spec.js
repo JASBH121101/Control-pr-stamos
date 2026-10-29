@@ -10,6 +10,10 @@ test("operator interface has no email/password fields and offers a PIN gate", as
   await expect(page.locator("#pin-unlock-form")).toHaveCount(1);
   await expect(page.getByRole("slider", { name: "Nivel de tamaño del texto" })).toBeVisible();
   await expect(page.locator("#lock-operator")).toBeAttached();
+  await expect(page.locator("#biometric-unlock")).toBeAttached();
+  await expect(page.locator("#biometric-unlock")).toBeHidden();
+  await expect(page.locator("#enable-biometric")).toBeAttached();
+  await expect(page.locator("#disable-biometric")).toBeAttached();
 });
 
 test("operator PIN forms enforce a 4-to-6 digit pattern", async ({ page }) => {
