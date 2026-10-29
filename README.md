@@ -16,7 +16,7 @@ Esta primera entrega establece un prototipo web responsive, lógica financiera p
 
 ## Desarrollo y pruebas
 ```bash
-npm ci
+npm install
 npm run dev
 npm test
 npx playwright install --with-deps chromium
