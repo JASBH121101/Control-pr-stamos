@@ -160,7 +160,7 @@ async function openOperatorSession(){
  if(!device.is_active){showPairForm("setup");$("#pair-setup-form").hidden=true;$("#pairing-title").textContent="Acceso desactivado";$("#pairing-description").textContent="El propietario revocó este dispositivo. Pídele un enlace nuevo.";status("Dispositivo revocado.");return}
  ownerId=device.owner_id;await sb.rpc("lock_operator_session");showPairForm("unlock");$("#pairing-title").textContent="Desbloquea Control Préstamos";$("#pairing-description").textContent="Introduce el PIN de este celular. No hace falta recordar una contraseña de cuenta.";status("La app está bloqueada por seguridad.");
 }
-$("#pair-setup-form").addEventListener("submit",handleSetupPair);
+$("#pair-setup-form").addEventListener("submit",handleSetupPair);$("#retry-sync").addEventListener("click",()=>{void lockToPin("Vuelve a introducir tu PIN para autorizar la sincronización con el servidor.")});
 $("#pin-unlock-form").addEventListener("submit",handleUnlock);
 $("#lock-operator").addEventListener("click",()=>{void lockToPin("Aplicación bloqueada manualmente.")});
 document.addEventListener("pointerdown",()=>{void noteActivity()},{passive:true});
