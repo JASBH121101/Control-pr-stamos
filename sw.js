@@ -1,4 +1,4 @@
-const CACHE_NAME = "control-prestamos-shell-v14";
+const CACHE_NAME = "control-prestamos-shell-v15";
 const APP_ROOT = new URL("./", self.location.href);
 const SHELL_FILES = [
   "./",
