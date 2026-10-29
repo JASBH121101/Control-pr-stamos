@@ -115,6 +115,9 @@ test("owner dashboard stays clean until an action is chosen and can rename a tru
 
   await page.locator("#show-loan-form").click();
   await expect(page.locator("#entry-panel")).toBeVisible();
+  await expect(page.locator("#loan-date")).toHaveClass(/date-empty/);
+  await page.locator("#loan-date").fill("2026-10-29");
+  await expect(page.locator("#loan-date")).not.toHaveClass(/date-empty/);
   await page.locator("#close-form").click();
   await expect(page.locator("#entry-panel")).toBeHidden();
 
