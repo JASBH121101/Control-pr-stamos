@@ -149,6 +149,7 @@ function openForm(type,loan=null){
  $("#payment-date-field").hidden=!isPayment;
  $("#loan-date").required=!isPayment;
  $("#payment-date").required=isPayment;
+ $("#loan-date").max=todayLocalDate();$("#payment-date").max=todayLocalDate();
  $("#loan-date").value=todayLocalDate();
  $("#payment-date").value=todayLocalDate();
  $("#months-field").hidden=isPayment;$("#months").required=!isPayment;$("#months").value="1";
@@ -182,12 +183,14 @@ $("#entry-form").addEventListener("submit",async e=>{
    const loan=loans.find(l=>l.id===selectedLoanId);
    if(!loan)throw new Error("No se identificó el préstamo exacto.");
    if(amountCents>balance(loan))throw new Error("El abono no puede superar el saldo pendiente.");
+   if($("#payment-date").value>todayLocalDate())throw new Error("La fecha del abono no puede estar en el futuro.");
    const paidAt=dateInputTimestamp($("#payment-date").value);
    const {error:paymentError}=await supabase.from("payments").insert({owner_id:user.id,loan_id:loan.id,amount_cents:amountCents,paid_at:paidAt,note});
    if(paymentError)throw paymentError;
   }else{
    const months=Number($("#months").value),loanDate=$("#loan-date").value;
    if(!loanDate)throw new Error("Selecciona la fecha del préstamo.");
+   if(loanDate>todayLocalDate())throw new Error("La fecha del préstamo no puede estar en el futuro.");
    const customerName=$("#client-name").value.trim(),phone=$("#client-phone").value.trim();
    if(!customerName)throw new Error("Escribe el nombre del cliente.");
    let customerId;
